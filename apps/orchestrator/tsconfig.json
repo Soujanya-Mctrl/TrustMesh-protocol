@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "paths": {
+      "@trustmesh/shared": ["../../packages/shared/dist/index.d.ts"],
+      "@trustmesh/shared/*": ["../../packages/shared/dist/*"],
+      "@trustmesh/sdk": ["../../packages/sdk/dist/index.d.ts"],
+      "@trustmesh/sdk/*": ["../../packages/sdk/dist/*"],
+      "@trustmesh/agents": ["../agents/dist/index.d.ts"],
+      "@trustmesh/agents/*": ["../agents/dist/*"]
+    },
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false
+  },
+  "include": ["src/**/*.ts"]
+}

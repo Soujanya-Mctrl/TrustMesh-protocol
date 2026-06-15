@@ -1,0 +1,23 @@
+{
+  "name": "@trustmesh/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@trustmesh/shared": "file:../../packages/shared",
+    "@trustmesh/sdk": "file:../../packages/sdk",
+    "@trustmesh/agents": "file:../agents"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node ./dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

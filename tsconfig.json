@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@trustmesh/shared": ["./packages/shared/src/index.ts"],
+      "@trustmesh/shared/*": ["./packages/shared/src/*"],
+      "@trustmesh/sdk": ["./packages/sdk/src/index.ts"],
+      "@trustmesh/sdk/*": ["./packages/sdk/src/*"],
+      "@trustmesh/agents": ["./apps/agents/src/index.ts"],
+      "@trustmesh/agents/*": ["./apps/agents/src/*"],
+      "@trustmesh/orchestrator": ["./apps/orchestrator/src/index.ts"],
+      "@trustmesh/orchestrator/*": ["./apps/orchestrator/src/*"],
+      "@trustmesh/dashboard/*": ["./apps/dashboard/src/*"]
+    }
+  },
+  "include": [
+    "hardhat.config.ts",
+    "contracts/**/*.sol",
+    "test/**/*.ts",
+    "packages/**/*.ts",
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "ignition/**/*.ts",
+    "scripts/**/*.ts"
+  ]
+}

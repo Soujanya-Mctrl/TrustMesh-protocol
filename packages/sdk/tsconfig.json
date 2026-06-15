@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "paths": {
+      "@trustmesh/shared": ["../shared/dist/index.d.ts"],
+      "@trustmesh/shared/*": ["../shared/dist/*"]
+    },
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}
