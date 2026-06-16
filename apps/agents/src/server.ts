@@ -19,7 +19,7 @@ try {
   }
 }
 
-const rpcUrl = "http://127.0.0.1:8545";
+const rpcUrl = process.env.RPC_URL || process.env.FUJI_RPC_URL || "http://127.0.0.1:8545";
 const publicClient = createPublicClient({
   chain: hardhat,
   transport: http(rpcUrl),

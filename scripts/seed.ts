@@ -87,6 +87,15 @@ async function main() {
   const { viem } = await hre.network.getOrCreate();
   const walletClients = await viem.getWalletClients();
   const deployer = walletClients[0];
+  const publicClient = await viem.getPublicClient();
+
+  async function waitTx(hash: `0x${string}`) {
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status === "reverted") {
+      throw new Error(`Transaction reverted: ${hash}`);
+    }
+    return receipt;
+  }
 
   // Deterministic agent addresses matching profiles.ts
   const agentAddresses = [
@@ -143,11 +152,13 @@ async function main() {
     let agentId: bigint;
     if (!isRegistered) {
       // 1. Register agent via its TaskAgent contract
-      await taskAgent.write.registerAgent([
+      const tx = await taskAgent.write.registerAgent([
+        agentAddress,
         agent.name,
         agent.description,
         `ipfs://${agent.name.replace(/\s+/g, "").toLowerCase()}Metadata`
       ]);
+      await waitTx(tx);
       agentId = (await taskAgent.read.agentId()) as bigint;
       console.log(`  ✓ Identity registered with Agent ID: ${agentId}`);
     } else {
@@ -157,20 +168,30 @@ async function main() {
 
     // Set historical registration time (admin override)
     const registrationTime = now - agent.registrationDaysAgo * 86400;
-    await identityRegistry.write.setRegistrationTime([
+    const regTx = await identityRegistry.write.setRegistrationTime([
       agentId,
       BigInt(registrationTime)
     ]);
+    await waitTx(regTx);
     console.log(`  ✓ Registration timestamp set to ${agent.registrationDaysAgo} days ago`);
 
     console.log(`  ✓ Agent Wallet registered at EOA: ${agentAddress}`);
 
-    // Seed agent wallet with 10 AVAX from deployer (Faucet simulation)
-    await deployer.sendTransaction({
-      to: agentAddress,
-      value: 10000000000000000000n, // 10 AVAX
-    });
-    console.log(`  ✓ Faucet seeded EOA with 10 AVAX`);
+    // Seed agent wallet with AVAX from deployer (Faucet simulation)
+    const networkName = (hre.network as any).name;
+    const faucetValue = networkName === "fuji" ? 200000000000000000n : 10000000000000000000n; // 0.2 AVAX for Fuji, 10 AVAX for local
+    const deployerBalance = await publicClient.getBalance({ address: deployer.account.address });
+
+    if (deployerBalance > faucetValue + 50000000000000000n) { // include buffer for gas
+      const faucetTx = await deployer.sendTransaction({
+        to: agentAddress,
+        value: faucetValue,
+      });
+      await waitTx(faucetTx);
+      console.log(`  ✓ Faucet seeded EOA with ${networkName === "fuji" ? "0.2" : "10"} AVAX`);
+    } else {
+      console.log(`  ⚠ Faucet skip: deployer balance too low (${Number(deployerBalance) / 1e18} AVAX)`);
+    }
 
     // 2. Submit real reputation reviews from multiple counterparties (against Agent ID!)
     for (let r = 0; r < agent.reviews.length; r++) {
@@ -180,7 +201,7 @@ async function main() {
         deployed.contracts.ReputationRegistry,
         { client: { wallet: reviewerWallet } }
       );
-      await reputationAsReviewer.write.giveFeedback([
+      const fbTx = await reputationAsReviewer.write.giveFeedback([
         agentId,
         agent.reviews[r].rating,
         0, // valueDecimals
@@ -190,12 +211,13 @@ async function main() {
         "", // feedbackURI
         "0x0000000000000000000000000000000000000000000000000000000000000000" // feedbackHash
       ]);
+      await waitTx(fbTx);
     }
     console.log(`  ✓ ${agent.reviews.length} reputation reviews submitted against Agent ID: ${agentId}`);
 
     // 3. Seed agent metrics directly on AgentMetricsRegistry (against Agent EOA Address!)
     const settledUsd18 = BigInt(agent.settledUsd) * BigInt(1e18);
-    await metricsRegistry.write.seedMetrics([
+    const metricsTx = await metricsRegistry.write.seedMetrics([
       agentAddress,
       [
         settledUsd18,
@@ -204,12 +226,14 @@ async function main() {
         agent.counterparties,
       ],
     ]);
+    await waitTx(metricsTx);
     console.log(
       `  ✓ Metrics seeded: $${agent.settledUsd} settled, ${agent.txCount} txs, ${agent.counterparties} counterparties against EOA`,
     );
 
     // 4. Compute and verify composite score (against Agent EOA Address!)
-    await trustRegistry.write.getCompositeScore([agentAddress]);
+    const scoreTx = await trustRegistry.write.getCompositeScore([agentAddress]);
+    await waitTx(scoreTx);
     const cached = (await trustRegistry.read.getCachedScore([agentAddress])) as any;
     const score = Number(cached.score !== undefined ? cached.score : cached[0]);
     console.log(`  ✓ Composite score: ${score} (target: ${agent.targetScore})`);
@@ -227,11 +251,12 @@ async function main() {
   const taskHash = "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e" as `0x${string}`;
   
   try {
-    await suspiciousTaskAgent.write.requestValidation([
+    const valTx = await suspiciousTaskAgent.write.requestValidation([
       deployed.contracts.PolicyEngine, // validatorAddress
       "",                             // requestURI
       taskHash,                       // requestHash
     ]);
+    await waitTx(valTx);
     console.log(`  ✓ Pending Validation requested (Task Hash: ${taskHash})`);
   } catch (err) {
     console.log(`  ✓ Validation request already exists or skipped: ${(err as any).message ?? err}`);

@@ -103,6 +103,7 @@ contract TaskAgent is Ownable, ReentrancyGuard {
 
     /// @notice Register the agent with ERC-8004 Identity Registry
     function registerAgent(
+        address agentWallet,
         string calldata _name,
         string calldata _description,
         string calldata _agentURI
@@ -125,7 +126,7 @@ contract TaskAgent is Ownable, ReentrancyGuard {
         });
 
         // Register with Identity Registry
-        agentId = identityRegistry.registerFor(owner(), _agentURI, metadata);
+        agentId = identityRegistry.registerFor(agentWallet, _agentURI, metadata);
         isRegistered = true;
 
         emit AgentRegistered(agentId, _name, _agentURI);

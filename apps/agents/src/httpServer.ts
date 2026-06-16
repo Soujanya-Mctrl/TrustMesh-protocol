@@ -6,7 +6,7 @@ import { hardhat } from "viem/chains";
 import { providerProfiles } from "./profiles.js";
 import { generateAIContent } from "./server.js";
 
-const rpcUrl = "http://127.0.0.1:8545";
+const rpcUrl = process.env.RPC_URL || process.env.FUJI_RPC_URL || "http://127.0.0.1:8545";
 const publicClient = createPublicClient({
   chain: hardhat,
   transport: viemHttp(rpcUrl),
