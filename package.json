@@ -29,7 +29,8 @@
     "deploy:fuji": "hardhat run scripts/deploy.ts --network fuji",
     "seed:local": "hardhat run scripts/seed.ts --network localhost",
     "seed:fuji": "hardhat run scripts/seed.ts --network fuji",
-    "dashboard": "npm run start --workspace @trustmesh/dashboard"
+    "dashboard": "npm run start --workspace @trustmesh/dashboard",
+    "demo": "node scripts/interactive-demo.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",

@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { createPublicClient, createWalletClient, http, parseAbi, keccak256, toBytes } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { hardhat } from "viem/chains";
+import { avalancheFuji, hardhat } from "viem/chains";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 
@@ -20,8 +20,11 @@ try {
 }
 
 const rpcUrl = process.env.RPC_URL || process.env.FUJI_RPC_URL || "http://127.0.0.1:8545";
+const isFuji = rpcUrl.includes("avax-test") || rpcUrl.includes("fuji") || rpcUrl.includes("43113");
+const chain = isFuji ? avalancheFuji : hardhat;
+
 const publicClient = createPublicClient({
-  chain: hardhat,
+  chain,
   transport: http(rpcUrl),
 });
 
@@ -137,7 +140,7 @@ export async function generateAIContent(
     const handlers = customHandlers || defaultHandlers;
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: sysInstruction,
       tools: tools
     });
@@ -198,7 +201,7 @@ export async function executeAgentTask(config: AgentConfig, taskId: bigint): Pro
   
   const walletClient = createWalletClient({
     account,
-    chain: hardhat,
+    chain,
     transport: http(rpcUrl),
   });
 

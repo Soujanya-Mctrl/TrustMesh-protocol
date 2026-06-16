@@ -42,7 +42,7 @@ const TRUST_REGISTRY_ABI = parseAbi([
 ]);
 
 const REPUTATION_REGISTRY_ABI = parseAbi([
-  "function submitFeedback(address agent, uint8 qualityScore, uint8 reliabilityScore, string calldata tags) external",
+  "function giveFeedback(uint256 agentId, int128 value, uint8 valueDecimals, string calldata tag1, string calldata tag2, string calldata endpoint, string calldata feedbackURI, bytes32 feedbackHash) external",
 ]);
 
 const VALIDATION_REGISTRY_ABI = parseAbi([
@@ -239,18 +239,38 @@ export class ViemRuntime implements TrustMeshRuntime {
         address: this.config.policyEngineAddress,
         abi: POLICY_ENGINE_ABI,
         functionName: "trustRegistry",
-      });
+      }) as `0x${string}`;
       const reputationRegistry = await this.publicClient.readContract({
-        address: trustRegistry as `0x${string}`,
+        address: trustRegistry,
         abi: TRUST_REGISTRY_ABI,
         functionName: "REPUTATION_REGISTRY",
-      });
+      }) as `0x${string}`;
+      const identityRegistry = await this.publicClient.readContract({
+        address: trustRegistry,
+        abi: TRUST_REGISTRY_ABI,
+        functionName: "IDENTITY_REGISTRY",
+      }) as `0x${string}`;
+      const agentId = await this.publicClient.readContract({
+        address: identityRegistry,
+        abi: parseAbi(["function getAgentIdByWallet(address who) external view returns (uint256)"]),
+        functionName: "getAgentIdByWallet",
+        args: [hotWallet],
+      }) as bigint;
       
       const feedbackHash = await this.walletClient.writeContract({
-        address: reputationRegistry as `0x${string}`,
+        address: reputationRegistry,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "submitFeedback",
-        args: [hotWallet, 95, 95, "fast,accurate"],
+        functionName: "giveFeedback",
+        args: [
+          agentId,
+          95n, // value
+          0,   // decimals
+          "fast", // tag1
+          "accurate", // tag2
+          "",  // endpoint
+          "",  // feedbackURI
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+        ],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: feedbackHash });
 
@@ -355,18 +375,38 @@ export class ViemRuntime implements TrustMeshRuntime {
         address: this.config.policyEngineAddress,
         abi: POLICY_ENGINE_ABI,
         functionName: "trustRegistry",
-      });
+      }) as `0x${string}`;
       const reputationRegistry = await this.publicClient.readContract({
-        address: trustRegistry as `0x${string}`,
+        address: trustRegistry,
         abi: TRUST_REGISTRY_ABI,
         functionName: "REPUTATION_REGISTRY",
-      });
+      }) as `0x${string}`;
+      const identityRegistry = await this.publicClient.readContract({
+        address: trustRegistry,
+        abi: TRUST_REGISTRY_ABI,
+        functionName: "IDENTITY_REGISTRY",
+      }) as `0x${string}`;
+      const agentId = await this.publicClient.readContract({
+        address: identityRegistry,
+        abi: parseAbi(["function getAgentIdByWallet(address who) external view returns (uint256)"]),
+        functionName: "getAgentIdByWallet",
+        args: [hotWallet],
+      }) as bigint;
       
       const feedbackHash = await this.walletClient.writeContract({
-        address: reputationRegistry as `0x${string}`,
+        address: reputationRegistry,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "submitFeedback",
-        args: [hotWallet, 78, 78, "correct-output"],
+        functionName: "giveFeedback",
+        args: [
+          agentId,
+          78n, // value
+          0,   // decimals
+          "correct-output", // tag1
+          "", // tag2
+          "",  // endpoint
+          "",  // feedbackURI
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+        ],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: feedbackHash });
 
@@ -434,14 +474,32 @@ export class ViemRuntime implements TrustMeshRuntime {
       timestamp: Date.now(),
     });
 
-    // Step 1: Request validation on-chain using standard validationRequest
-    const validationTxHash = await this.walletClient.writeContract({
-      address: validationRegistryAddress,
-      abi: VALIDATION_REGISTRY_ABI,
-      functionName: "validationRequest",
+    // Step 1: Request validation on-chain via the agent's TaskAgent contract
+    const taskAgentAddress = await this.publicClient.readContract({
+      address: identityRegistryAddress,
+      abi: parseAbi(["function ownerOf(uint256 tokenId) external view returns (address)"]),
+      functionName: "ownerOf",
+      args: [agentId],
+    }) as `0x${string}`;
+
+    const payeePrivateKey = HARDHAT_PRIVATE_KEYS[hotWallet.toLowerCase()];
+    if (!payeePrivateKey) {
+      throw new Error(`Private key not found for agent wallet: ${hotWallet}`);
+    }
+
+    const payeeAccount = privateKeyToAccount(payeePrivateKey);
+    const payeeWalletClient = createWalletClient({
+      account: payeeAccount,
+      chain: this.walletClient.chain,
+      transport: http(this.config.rpcUrl),
+    });
+
+    const validationTxHash = await payeeWalletClient.writeContract({
+      address: taskAgentAddress,
+      abi: parseAbi(["function requestValidation(address validator, string calldata requestURI, bytes32 requestHash) external"]),
+      functionName: "requestValidation",
       args: [
-        this.config.policyEngineAddress, // validatorAddress
-        agentId,
+        this.config.policyEngineAddress, // validator Address (PolicyEngine)
         "",                              // requestURI
         taskHash,                        // requestHash
       ],

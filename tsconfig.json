@@ -24,8 +24,8 @@
     "contracts/**/*.sol",
     "test/**/*.ts",
     "packages/**/*.ts",
-    "apps/**/*.ts",
-    "apps/**/*.tsx",
+    "apps/agents/**/*.ts",
+    "apps/orchestrator/**/*.ts",
     "ignition/**/*.ts",
     "scripts/**/*.ts"
   ]

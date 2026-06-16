@@ -2,13 +2,16 @@ import http from "node:http";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createPublicClient, http as viemHttp, keccak256, toBytes } from "viem";
-import { hardhat } from "viem/chains";
+import { avalancheFuji, hardhat } from "viem/chains";
 import { providerProfiles } from "./profiles.js";
 import { generateAIContent } from "./server.js";
 
 const rpcUrl = process.env.RPC_URL || process.env.FUJI_RPC_URL || "http://127.0.0.1:8545";
+const isFuji = rpcUrl.includes("avax-test") || rpcUrl.includes("fuji") || rpcUrl.includes("43113");
+const chain = isFuji ? avalancheFuji : hardhat;
+
 const publicClient = createPublicClient({
-  chain: hardhat,
+  chain,
   transport: viemHttp(rpcUrl),
 });
 
@@ -19,6 +22,8 @@ function startServer(port: number, agentKey: string) {
     console.error(`Profile not found for agent key: ${agentKey}`);
     return;
   }
+
+  const quoteCache = new Map<string, { output: string; deliverableHash: string }>();
 
   const server = http.createServer(async (req, res) => {
     // Enable CORS headers
@@ -53,7 +58,18 @@ function startServer(port: number, agentKey: string) {
 
           // 1. Quote endpoint (returns deliverable hash for committed escrow)
           if (type === "quote") {
-            const deliverableHash = keccak256(toBytes(prompt || "default"));
+            const systemInstruction = 
+              agentKey === "dataFeedPro" 
+                ? "You are DataFeed Pro, a premium DeFi and market analysis oracle."
+                : agentKey === "newService"
+                ? "You are NewService, a professional translation and localization assistant."
+                : "You are SuspiciousAgent, a high-frequency trading bot and arbitrage scanner.";
+
+            const output = await generateAIContent(profile.name, prompt || "", systemInstruction);
+            const deliverableHash = keccak256(toBytes(output));
+            
+            quoteCache.set(prompt || "", { output, deliverableHash });
+
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ deliverableHash }));
             return;
@@ -147,16 +163,24 @@ function startServer(port: number, agentKey: string) {
 
             console.log(`[${profile.name}] Payment tx verified successfully!`);
 
-            // Generate AI output
-            const systemInstruction = 
-              agentKey === "dataFeedPro" 
-                ? "You are DataFeed Pro, a premium DeFi and market analysis oracle."
-                : agentKey === "newService"
-                ? "You are NewService, a professional translation and localization assistant."
-                : "You are SuspiciousAgent, a high-frequency trading bot and arbitrage scanner.";
+            // Generate AI output or retrieve from cache
+            let cached = quoteCache.get(prompt || "");
+            if (!cached) {
+              const systemInstruction = 
+                agentKey === "dataFeedPro" 
+                  ? "You are DataFeed Pro, a premium DeFi and market analysis oracle."
+                  : agentKey === "newService"
+                  ? "You are NewService, a professional translation and localization assistant."
+                  : "You are SuspiciousAgent, a high-frequency trading bot and arbitrage scanner.";
 
-            const output = await generateAIContent(profile.name, prompt || "", systemInstruction);
-            const deliverableHash = keccak256(toBytes(output));
+              const output = await generateAIContent(profile.name, prompt || "", systemInstruction);
+              const deliverableHash = keccak256(toBytes(output));
+              cached = { output, deliverableHash };
+            } else {
+              quoteCache.delete(prompt || "");
+            }
+
+            const { output, deliverableHash } = cached;
 
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ output, deliverableHash }));
