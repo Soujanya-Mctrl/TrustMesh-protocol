@@ -107,6 +107,42 @@ The core features and integrations are fully implemented, tested, and validated:
 - **Gemini Tools**: AI agents dynamically query the blockchain using Gemini Function Calling.
 - **Cooperative Scenarios**: All 3 multi-agent scenarios compile and execute successfully.
 
+## Multichain L1 Sandbox Simulation
+
+To support Avalanche's focus on custom L1 subnets, TrustMesh simulates a multichain layout where the payment/reputation core is decoupled from the execution layer using **Teleporter** cross-chain messaging:
+
+```mermaid
+flowchart LR
+    subgraph PrimaryChain["Avalanche C-Chain (Primary Payment Rail)"]
+        PolicyEngineC["PolicyEngine.sol"]
+        EscrowVaultC["EscrowVault.sol"]
+        TrustRegistryC["TrustRegistry.sol"]
+        TeleporterC["Teleporter Messenger (0x253b...)"]
+    end
+
+    subgraph Relayer["Teleporter AWM Relayer"]
+        AWM["Cross-Chain Warp Relay"]
+    end
+
+    subgraph CustomL1["Avalanche L1 Subnet (Task Execution Rail)"]
+        TeleporterL1["Teleporter Messenger (0x253b...)"]
+        TaskAgentL1["TaskAgent.sol (Specialist Oracle)"]
+    end
+
+    %% Transactions
+    PolicyEngineC -->|"1. sendCrossChainMessage"| TeleporterC
+    TeleporterC -->|AWM Signatures| AWM
+    AWM -->|"2. deliverMessage"| TeleporterL1
+    TeleporterL1 -->|"3. requestTask / execute"| TaskAgentL1
+    TaskAgentL1 -->|"4. executeTask"| TaskAgentL1
+    TaskAgentL1 -.->|"5. relayDeliverable (Optional)"| TeleporterL1
+    TeleporterL1 -.->|AWM Signatures| AWM
+    AWM -.->|"6. completeEscrow (Optional)"| TeleporterC
+    TeleporterC -.->|Release Funds| EscrowVaultC
+```
+
+For setup and deployment instructions on this multichain configuration, refer to the [L1_SANDBOX.md](file:///d:/Projects/trust_mesh/L1_SANDBOX.md) guide.
+
 ## Technology Stack & System Components
 
 TrustMesh is built on a highly modular and type-safe stack spanning smart contracts, lightweight off-chain services, and advanced AI agent models:

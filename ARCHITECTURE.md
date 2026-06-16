@@ -58,6 +58,45 @@ flowchart TD
     Agent2 -.->|"4. Escalate validation to Admin"| ValidationRegistry
 ```
 
+## 🏔️ Multichain L1 Subnet Architecture
+
+To support Avalanche's focus on custom L1 subnets, TrustMesh simulates a multichain layout where the payment/reputation core is decoupled from the execution layer using **Teleporter** cross-chain messaging:
+
+```mermaid
+flowchart LR
+    subgraph PrimaryChain["Avalanche C-Chain (Primary Payment Rail)"]
+        PolicyEngineC["PolicyEngine.sol"]
+        EscrowVaultC["EscrowVault.sol"]
+        TrustRegistryC["TrustRegistry.sol"]
+        TeleporterC["Teleporter Messenger (0x253b...)"]
+    end
+
+    subgraph Relayer["Teleporter AWM Relayer"]
+        AWM["Cross-Chain Warp Relay"]
+    end
+
+    subgraph CustomL1["Avalanche L1 Subnet (Task Execution Rail)"]
+        TeleporterL1["Teleporter Messenger (0x253b...)"]
+        TaskAgentL1["TaskAgent.sol (Specialist Oracle)"]
+    end
+
+    %% Transactions
+    PolicyEngineC -->|"1. sendCrossChainMessage"| TeleporterC
+    TeleporterC -->|AWM Signatures| AWM
+    AWM -->|"2. deliverMessage"| TeleporterL1
+    TeleporterL1 -->|"3. requestTask / execute"| TaskAgentL1
+    TaskAgentL1 -->|"4. executeTask"| TaskAgentL1
+    TaskAgentL1 -.->|"5. relayDeliverable (Optional)"| TeleporterL1
+    TeleporterL1 -.->|AWM Signatures| AWM
+    AWM -.->|"6. completeEscrow (Optional)"| TeleporterC
+    TeleporterC -.->|Release Funds| EscrowVaultC
+```
+
+* **Cross-Chain Relay Protocol**: Avalanche Warp Messaging (AWM) enables secure, trustless delivery of execution requests and deliverables between subnets.
+* **Separation of Concerns**: Decouples liquidity-heavy smart contracts (escrow and payments) from high-frequency compute/oracle work (execution on the L1 subnet).
+
+For setup and deployment instructions on this multichain configuration, refer to the [L1_SANDBOX.md](file:///d:/Projects/trust_mesh/L1_SANDBOX.md) guide.
+
 ---
 
 ## 🔄 Tiered Payment & Verification Flows (Direct EOA)

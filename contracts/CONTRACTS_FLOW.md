@@ -128,6 +128,33 @@ sequenceDiagram
 
 ---
 
+## 🔗 Cross-Chain L1 Teleporter Contract Flow
+
+To simulate a true multi-chain Avalanche environment, the payment/escrow registry layer on the **C-Chain** coordinates task execution on the **L1 Subnet** using **Teleporter** cross-chain contract calls:
+
+```mermaid
+sequenceDiagram
+    participant Requester as Requester EOA
+    participant PE as PolicyEngine.sol (C-Chain)
+    participant TeleporterC as TeleporterMessenger (C-Chain)
+    participant Relayer as AWM Relayer Node
+    participant TeleporterL1 as TeleporterMessenger (L1 Subnet)
+    participant TaskAgent as TaskAgent.sol (L1 Subnet)
+
+    Requester->>PE: payAndRequestTask(...)
+    PE->>TeleporterC: sendCrossChainMessage(destinationChainId, TaskAgent_Address, messagePayload)
+    Note over TeleporterC: Emits SendCrossChainMessage event
+    
+    Relayer->>TeleporterC: Fetch message & P-Chain signatures
+    Relayer->>TeleporterL1: receiveCrossChainMessage(signedMessage)
+    
+    TeleporterL1->>TaskAgent: receiveTeleporterMessage(sourceChainId, senderAddress, messagePayload)
+    Note over TaskAgent: Verifies msg.sender == TeleporterL1
+    Note over TaskAgent: Registers & executes the task locally on L1 Subnet
+```
+
+---
+
 ## 3. Feedback Loop Summary
 
 Every interaction feeds back into the scoring system:
