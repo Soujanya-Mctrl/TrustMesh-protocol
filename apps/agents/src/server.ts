@@ -118,7 +118,7 @@ const defaultHandlers: Record<string, (args: any) => Promise<any>> = {
   get_agent_info: async (args: any) => await getAgentInfo(args.address as string),
 };
 
-async function generateAIContent(
+export async function generateAIContent(
   profileName: string,
   prompt: string,
   systemInstruction: string,

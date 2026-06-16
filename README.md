@@ -22,7 +22,7 @@ counterparty diversity, and Sybil-like transaction patterns.
 
 ## Architecture
 
-The diagram below illustrates the TrustMesh protocol layout. It highlights the smart contract layers that calculate trust and enforce payment tiers, the ERC-6551 Token Bound Accounts (TBA) that act as agent wallets, and the off-chain orchestration that routes requests based on the on-chain data:
+The diagram below illustrates the TrustMesh protocol layout. It highlights the smart contract layers that calculate trust and enforce payment tiers, the Externally Owned Accounts (EOAs) that act as agent wallets, and the off-chain orchestration that routes requests based on the on-chain data:
 
 ```mermaid
 graph TD
@@ -34,7 +34,7 @@ graph TD
     end
 
     subgraph OnChain["On-Chain Protocol Layer (Avalanche Fuji / Local)"]
-        IdentityRegistry["IdentityRegistry (Agent NFT & TBA Deployment)"]
+        IdentityRegistry["IdentityRegistry (Agent NFT & EOA Wallet Mapping)"]
         PolicyEngine["PolicyEngine (Tier Routing)"]
         TrustRegistry["TrustRegistry (Composite Scoring)"]
         MetricsRegistry["AgentMetricsRegistry (Volume & Diversity)"]
@@ -43,24 +43,24 @@ graph TD
         ValidationRegistry["ValidationRegistry (Tier 2 Risk Simulation)"]
     end
 
-    subgraph Providers["Service Provider Agents (with TBA Wallets)"]
+    subgraph Providers["Service Provider Agents (with EOA Wallets)"]
         subgraph Agent0Box["DataFeed Pro (High Trust - Tier 0)"]
             Agent0["DataFeed Pro Agent Node"]
-            TBA0["ERC-6551 Token Bound Account (TBA)"]
+            EOA0["Agent EOA Wallet"]
         end
         subgraph Agent1Box["NewService (Medium Trust - Tier 1)"]
             Agent1["NewService Agent Node"]
-            TBA1["ERC-6551 Token Bound Account (TBA)"]
+            EOA1["Agent EOA Wallet"]
         end
         subgraph Agent2Box["SuspiciousAgent (Low Trust - Tier 2)"]
             Agent2["SuspiciousAgent Node"]
-            TBA2["ERC-6551 Token Bound Account (TBA)"]
+            EOA2["Agent EOA Wallet"]
         end
     end
 
-    Faucet["Testnet Faucet"] -->|"Seeds AVAX"| TBA0
-    Faucet -->|"Seeds AVAX"| TBA1
-    Faucet -->|"Seeds AVAX"| TBA2
+    Faucet["Testnet Faucet"] -->|"Seeds AVAX"| EOA0
+    Faucet -->|"Seeds AVAX"| EOA1
+    Faucet -->|"Seeds AVAX"| EOA2
 
     %% Orchestrator & SDK relations
     Orchestrator -->|"1. pay(payee, amount, serviceUrl, prompt)"| SDK
@@ -68,14 +68,9 @@ graph TD
     PolicyEngine -->|"3. getCompositeScore()"| TrustRegistry
     
     %% Scoring details
-    IdentityRegistry -->|"Identity Age"| TrustRegistry
+    IdentityRegistry -->|"Identity Age & Wallet Map"| TrustRegistry
     MetricsRegistry -->|"Read stats"| TrustRegistry
     RepRegistry -->|"Read feedback"| TrustRegistry
-
-    %% Identity creation
-    IdentityRegistry -.->|"Deploys"| TBA0
-    IdentityRegistry -.->|"Deploys"| TBA1
-    IdentityRegistry -.->|"Deploys"| TBA2
 
     %% Tier routing execution with x402 payment rail
     SDK -->|"Route Tier 0: pay via x402"| Facilitator
@@ -87,7 +82,7 @@ graph TD
     %% Contract interactions for settlement
     SDK -->|"createEscrow(payee, hash)"| EscrowVault
     SDK -->|"releaseEscrow()"| EscrowVault
-    EscrowVault -->|"Releases Funds"| TBA1
+    EscrowVault -->|"Releases Funds"| EOA1
     
     SDK -->|"requestValidation(payee, taskHash)"| ValidationRegistry
     Agent2Box -.->|"Validation Alert / Escalation"| ValidationRegistry
@@ -100,14 +95,14 @@ graph TD
 
     class Orchestrator,SDK,Facilitator client;
     class IdentityRegistry,PolicyEngine,TrustRegistry,MetricsRegistry,RepRegistry,EscrowVault,ValidationRegistry contract;
-    class Agent0,Agent1,Agent2,TBA0,TBA1,TBA2 agent;
+    class Agent0,Agent1,Agent2,EOA0,EOA1,EOA2 agent;
     class Faucet external;
 ```
 
 ## Current Status
 
 The core features and integrations are fully implemented, tested, and validated:
-- **ERC-6551 TBAs**: Deployed and seeded as secure on-chain agent wallets.
+- **Direct EOA Mappings**: Deployed and seeded agent registry with direct EOA wallet mappings to optimize transaction flows and reduce gas costs.
 - **Commit-Lock-Reveal Escrow**: Fully integrated into the SDK and agents server.
 - **Gemini Tools**: AI agents dynamically query the blockchain using Gemini Function Calling.
 - **Cooperative Scenarios**: All 3 multi-agent scenarios compile and execute successfully.
@@ -121,7 +116,7 @@ TrustMesh is built on a highly modular and type-safe stack spanning smart contra
 * **Hardhat**: Local network simulation, compilation, deterministic address seeding, and contract unit-testing framework.
 * **Viem**: A modern, lightweight, type-safe TypeScript library for interacting with smart contracts, querying logs, and executing transactions on the Avalanche network.
 * **OpenZeppelin Contracts**: Standardized ERC-721 token URI storage libraries for agent identities and `ReentrancyGuard` safety wrappers for the escrow contracts.
-* **ERC-6551 Token Bound Accounts (TBA)**: Deploys individual smart wallets for each agent identity NFT. Payments are held by TBAs rather than hot wallets, and actions (e.g. deliverable submissions) are routed through the TBA using its `execute()` control.
+* **Agent EOA Wallet Mapping**: Associates each ERC-721 agent identity NFT directly with the agent's active EOA wallet. This simplifies transactions, avoids proxy execution overhead, and dramatically reduces gas fees while maintaining full on-chain identity tracking.
 
 ### 2. Off-Chain AI & Server Layer
 * **Google Generative AI SDK (`@google/generative-ai`)**: Integrates the `gemini-1.5-flash` model to power autonomous provider agents. Supports simulated oracle responses in environments without key access.
@@ -179,9 +174,9 @@ apps/
 
 The TrustMesh protocol is implemented across a set of modular smart contracts, each with a specific, isolated responsibility. We recently refactored the architecture to consolidate interfaces and remove legacy boilerplate, leaving a lean set of required components.
 
-### 1. IdentityRegistry & ERC-6551 TBAs
+### 1. IdentityRegistry & EOA Wallet Mappings
 
-The `IdentityRegistry` serves as the root of trust, minting a unique ERC-721 token for each service provider. It integrates directly with the `ERC6551Registry` to deploy a Token Bound Account (TBA) smart wallet for every agent identity. This TBA securely holds the agent's funds and acts on their behalf across the network.
+The `IdentityRegistry` serves as the root of trust, minting a unique ERC-721 token for each service provider. Instead of using complex and expensive proxy wallets (like Token Bound Accounts), it maps each agent's identity NFT directly to their active EOA wallet. This maps Agent IDs to wallet addresses on-chain, allowing the SDK and other smart contracts to verify the agent's identity and send funds directly to their primary keys.
 
 ### 2. ReputationRegistry
 
