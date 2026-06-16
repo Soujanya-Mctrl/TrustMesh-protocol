@@ -125,7 +125,7 @@ contract TaskAgent is Ownable, ReentrancyGuard {
         });
 
         // Register with Identity Registry
-        agentId = identityRegistry.register(_agentURI, metadata);
+        agentId = identityRegistry.registerFor(owner(), _agentURI, metadata);
         isRegistered = true;
 
         emit AgentRegistered(agentId, _name, _agentURI);

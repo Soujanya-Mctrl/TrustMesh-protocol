@@ -26,6 +26,7 @@ interface IIdentityRegistry {
     function register(string calldata agentURI, MetadataEntry[] calldata metadata) external returns (uint256 agentId);
     function register(string calldata agentURI) external returns (uint256 agentId);
     function register() external returns (uint256 agentId);
+    function registerFor(address wallet, string memory agentURI, MetadataEntry[] memory metadata) external returns (uint256 agentId);
 
     function setAgentURI(uint256 agentId, string calldata newURI) external;
     function getMetadata(uint256 agentId, string memory metadataKey) external view returns (bytes memory);
@@ -39,12 +40,6 @@ interface IIdentityRegistry {
     function getAgentIdByWallet(address who) external view returns (uint256);
     function getRegistrationTime(uint256 agentId) external view returns (uint256);
 }
-
-interface ERC6551AccountLike {
-    function tokenContract() external view returns (address);
-    function tokenId() external view returns (uint256);
-}
-
 /**
  * @title IdentityRegistry
  * @notice ERC-8004 Identity Registry implementation for Avalanche C-Chain
@@ -90,11 +85,16 @@ contract IdentityRegistry is ERC721URIStorage, IIdentityRegistry {
         );
     }
 
-    /// @notice Register a new agent with URI and metadata
-    function register(string calldata agentURI, MetadataEntry[] calldata metadata) external returns (uint256 agentId) {
+    /// @notice Register a new agent with URI, metadata, and a designated wallet address
+    function registerFor(
+        address wallet,
+        string memory agentURI,
+        MetadataEntry[] memory metadata
+    ) public returns (uint256 agentId) {
         agentId = _nextAgentId++;
         _mint(msg.sender, agentId);
-        _walletToAgentId[msg.sender] = agentId;
+        _agentWallets[agentId] = wallet;
+        _walletToAgentId[wallet] = agentId;
         _registeredAt[agentId] = block.timestamp;
         _setTokenURI(agentId, agentURI);
 
@@ -107,26 +107,23 @@ contract IdentityRegistry is ERC721URIStorage, IIdentityRegistry {
             emit MetadataSet(agentId, metadata[i].key, metadata[i].key, metadata[i].value);
         }
 
+        emit AgentWalletSet(agentId, wallet);
         emit Registered(agentId, agentURI, msg.sender);
+    }
+
+    /// @notice Register a new agent with URI and metadata
+    function register(string calldata agentURI, MetadataEntry[] calldata metadata) external returns (uint256 agentId) {
+        return registerFor(msg.sender, agentURI, metadata);
     }
 
     /// @notice Register a new agent with URI only
     function register(string calldata agentURI) external returns (uint256 agentId) {
-        agentId = _nextAgentId++;
-        _mint(msg.sender, agentId);
-        _walletToAgentId[msg.sender] = agentId;
-        _registeredAt[agentId] = block.timestamp;
-        _setTokenURI(agentId, agentURI);
-        emit Registered(agentId, agentURI, msg.sender);
+        return registerFor(msg.sender, agentURI, new MetadataEntry[](0));
     }
 
     /// @notice Register a new agent with no URI
     function register() external returns (uint256 agentId) {
-        agentId = _nextAgentId++;
-        _mint(msg.sender, agentId);
-        _walletToAgentId[msg.sender] = agentId;
-        _registeredAt[agentId] = block.timestamp;
-        emit Registered(agentId, "", msg.sender);
+        return registerFor(msg.sender, "", new MetadataEntry[](0));
     }
 
     /// @notice Update the agent URI
@@ -233,22 +230,9 @@ contract IdentityRegistry is ERC721URIStorage, IIdentityRegistry {
         return _nextAgentId - 1;
     }
 
-    /// @notice Get agentId from a wallet or TBA address
+    /// @notice Get agentId from a wallet address
     function getAgentIdByWallet(address who) external view returns (uint256) {
-        if (_walletToAgentId[who] != 0) {
-            return _walletToAgentId[who];
-        }
-
-        // Try to query as an ERC-6551 account
-        try ERC6551AccountLike(who).tokenContract() returns (address tc) {
-            if (tc == address(this)) {
-                try ERC6551AccountLike(who).tokenId() returns (uint256 tid) {
-                    return tid;
-                } catch {}
-            }
-        } catch {}
-
-        return 0;
+        return _walletToAgentId[who];
     }
 
     /// @notice Get registration timestamp for agentId

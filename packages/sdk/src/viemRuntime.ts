@@ -161,64 +161,19 @@ export class ViemRuntime implements TrustMeshRuntime {
     });
   }
 
-  async getTbaAddress(payeeAddress: string): Promise<`0x${string}`> {
-    if (!this.config.erc6551RegistryAddress) {
-      return payeeAddress as `0x${string}`;
-    }
 
-    const AIR_ABI = parseAbi([
-      "function agentTokenId(address agent) external view returns (uint256)",
-    ]);
-    const REGISTRY_ABI = parseAbi([
-      "function getAccount(address tokenContract, uint256 tokenId) external view returns (address)",
-    ]);
-
-    try {
-      const identityRegistryAddr = await this.publicClient.readContract({
-        address: this.config.trustRegistryAddress,
-        abi: TRUST_REGISTRY_ABI,
-        functionName: "IDENTITY_REGISTRY",
-      }) as `0x${string}`;
-
-      const tokenId = await this.publicClient.readContract({
-        address: identityRegistryAddr,
-        abi: AIR_ABI,
-        functionName: "agentTokenId",
-        args: [payeeAddress as `0x${string}`],
-      });
-
-      if (tokenId === 0n) {
-        return payeeAddress as `0x${string}`;
-      }
-
-      const tba = await this.publicClient.readContract({
-        address: this.config.erc6551RegistryAddress,
-        abi: REGISTRY_ABI,
-        functionName: "getAccount",
-        args: [identityRegistryAddr, tokenId],
-      });
-
-      return tba as `0x${string}`;
-    } catch (error) {
-      console.warn("Failed to retrieve TBA address, falling back to hot wallet:", error);
-      return payeeAddress as `0x${string}`;
-    }
-  }
 
   async evaluatePayment(
     request: TrustMeshRequest,
   ): Promise<PaymentEvaluation> {
     const hotWallet = request.payeeAddress as `0x${string}`;
-    
-    // Resolve TBA address first
-    const tbaAddress = await this.getTbaAddress(hotWallet);
 
-    // Get tier from PolicyEngine using the TBA address (on-chain scorer reads this)
+    // Get tier from PolicyEngine using the EOA address (on-chain scorer reads this)
     const tier = await this.publicClient.readContract({
       address: this.config.policyEngineAddress,
       abi: POLICY_ENGINE_ABI,
       functionName: "evaluateTier",
-      args: [tbaAddress, BigInt(request.amount)],
+      args: [hotWallet, BigInt(request.amount)],
     });
 
     // Get composite score from TrustRegistry
@@ -226,7 +181,7 @@ export class ViemRuntime implements TrustMeshRuntime {
       address: this.config.trustRegistryAddress,
       abi: TRUST_REGISTRY_ABI,
       functionName: "getCompositeScore",
-      args: [tbaAddress],
+      args: [hotWallet],
     }) as any;
 
     const score = Number(scoreResult.score !== undefined ? scoreResult.score : scoreResult[0]);
@@ -234,7 +189,7 @@ export class ViemRuntime implements TrustMeshRuntime {
     return {
       tier: Number(tier) as 0 | 1 | 2,
       compositeScore: score,
-      paymentRequestId: `pay-${Date.now()}-${tbaAddress.slice(2, 8)}`,
+      paymentRequestId: `pay-${Date.now()}-${hotWallet.slice(2, 8)}`,
       escrowAddress: this.config.escrowVaultAddress,
     };
   }
@@ -244,12 +199,11 @@ export class ViemRuntime implements TrustMeshRuntime {
     evaluation: PaymentEvaluation,
   ): Promise<PaymentResult> {
     const hotWallet = request.payeeAddress as `0x${string}`;
-    const tbaAddress = await this.getTbaAddress(hotWallet);
     const amount = BigInt(request.amount);
 
-    // 1. Direct settlement — send AVAX directly to the agent's TBA wallet
+    // 1. Direct settlement — send AVAX directly to the agent's EOA wallet
     const txHash = await this.walletClient.sendTransaction({
-      to: tbaAddress,
+      to: hotWallet,
       value: amount,
     });
 
@@ -268,7 +222,7 @@ export class ViemRuntime implements TrustMeshRuntime {
           functionName: "recordDirectSettlement",
           args: [
             this.walletClient.account.address,
-            tbaAddress,
+            hotWallet,
             amount,
             0n, // settledUsd18 — simplified for demo
           ],
@@ -296,7 +250,7 @@ export class ViemRuntime implements TrustMeshRuntime {
         address: reputationRegistry as `0x${string}`,
         abi: REPUTATION_REGISTRY_ABI,
         functionName: "submitFeedback",
-        args: [tbaAddress, 95, 95, "fast,accurate"],
+        args: [hotWallet, 95, 95, "fast,accurate"],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: feedbackHash });
 
@@ -305,7 +259,7 @@ export class ViemRuntime implements TrustMeshRuntime {
         address: this.config.trustRegistryAddress,
         abi: TRUST_REGISTRY_ABI,
         functionName: "getCompositeScore",
-        args: [tbaAddress],
+        args: [hotWallet],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: bustHash });
     } catch (err) {
@@ -325,7 +279,6 @@ export class ViemRuntime implements TrustMeshRuntime {
     evaluation: PaymentEvaluation,
   ): Promise<PaymentResult> {
     const hotWallet = request.payeeAddress as `0x${string}`;
-    const tbaAddress = await this.getTbaAddress(hotWallet);
     const amount = BigInt(request.amount);
 
     if (!this.config.escrowVaultAddress) {
@@ -352,12 +305,12 @@ export class ViemRuntime implements TrustMeshRuntime {
       throw new Error("Service provider did not return a deliverable hash for quote");
     }
 
-    // Step 2: Create escrow with the deliverable hash and lock AVAX under TBA payee
+    // Step 2: Create escrow with the deliverable hash and lock AVAX under payee EOA
     const escrowTxHash = await this.walletClient.writeContract({
       address: this.config.escrowVaultAddress,
       abi: ESCROW_VAULT_ABI,
       functionName: "createEscrow",
-      args: [tbaAddress, deliverableHash],
+      args: [hotWallet, deliverableHash],
       value: amount,
     });
 
@@ -377,7 +330,7 @@ export class ViemRuntime implements TrustMeshRuntime {
     )) as any;
     const responseHash = serviceRes?.deliverableHash ?? deliverableHash;
 
-    // Step 4: Simulate TBA owner (hot wallet) submitting deliverable via TBA execute()
+    // Step 4: Submit deliverable directly from payee wallet (EOA)
     const payeePrivateKey = HARDHAT_PRIVATE_KEYS[hotWallet.toLowerCase()];
     if (payeePrivateKey) {
       const payeeAccount = privateKeyToAccount(payeePrivateKey);
@@ -387,23 +340,11 @@ export class ViemRuntime implements TrustMeshRuntime {
         transport: http(this.config.rpcUrl),
       });
 
-      // Encode the target submitDeliverable(escrowId, responseHash) call
-      const submitData = encodeFunctionData({
+      const submitHash = await payeeWalletClient.writeContract({
+        address: this.config.escrowVaultAddress,
         abi: ESCROW_VAULT_ABI,
         functionName: "submitDeliverable",
         args: [escrowId, responseHash],
-      });
-
-      // Write to ERC6551Account.execute
-      const ACCOUNT_ABI = parseAbi([
-        "function execute(address to, uint256 value, bytes calldata data) external payable returns (bytes)",
-      ]);
-
-      const submitHash = await payeeWalletClient.writeContract({
-        address: tbaAddress,
-        abi: ACCOUNT_ABI,
-        functionName: "execute",
-        args: [this.config.escrowVaultAddress, 0n, submitData],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: submitHash });
     }
@@ -425,7 +366,7 @@ export class ViemRuntime implements TrustMeshRuntime {
         address: reputationRegistry as `0x${string}`,
         abi: REPUTATION_REGISTRY_ABI,
         functionName: "submitFeedback",
-        args: [tbaAddress, 78, 78, "correct-output"],
+        args: [hotWallet, 78, 78, "correct-output"],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: feedbackHash });
 
@@ -434,7 +375,7 @@ export class ViemRuntime implements TrustMeshRuntime {
         address: this.config.trustRegistryAddress,
         abi: TRUST_REGISTRY_ABI,
         functionName: "getCompositeScore",
-        args: [tbaAddress],
+        args: [hotWallet],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: bustHash });
     } catch (err) {
@@ -455,7 +396,6 @@ export class ViemRuntime implements TrustMeshRuntime {
     evaluation: PaymentEvaluation,
   ): Promise<PaymentResult> {
     const hotWallet = request.payeeAddress as `0x${string}`;
-    const tbaAddress = await this.getTbaAddress(hotWallet);
 
     // Get validationRegistry address dynamically from PolicyEngine
     const validationRegistryAddress = await this.publicClient.readContract({
@@ -483,12 +423,12 @@ export class ViemRuntime implements TrustMeshRuntime {
       address: identityRegistryAddress,
       abi: parseAbi(["function getAgentIdByWallet(address who) external view returns (uint256)"]),
       functionName: "getAgentIdByWallet",
-      args: [tbaAddress],
+      args: [hotWallet],
     }) as bigint;
 
     // Generate task hash based on the transaction spec
     const taskHash = buildCanonicalHash({
-      payee: tbaAddress,
+      payee: hotWallet,
       amount: request.amount,
       serviceUrl: request.serviceUrl,
       timestamp: Date.now(),

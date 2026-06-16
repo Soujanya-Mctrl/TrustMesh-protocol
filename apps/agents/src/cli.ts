@@ -1,10 +1,6 @@
-import { initializeTbaAddresses } from "./profiles.js";
 import { executeDataFeedPro } from "./dataFeedPro.js";
 import { executeNewService } from "./newService.js";
 import { executeSuspiciousAgent } from "./suspiciousAgent.js";
-
-// Initialize TBA addresses
-await initializeTbaAddresses();
 
 const args = process.argv.slice(2);
 const agentArg = args.find(a => a.startsWith("--agent="));

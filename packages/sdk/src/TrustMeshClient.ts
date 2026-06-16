@@ -27,7 +27,6 @@ export class TrustMeshClient extends EventEmitter {
       trustRegistryAddress: options.trustRegistryAddress,
       escrowVaultAddress: options.escrowVaultAddress,
       agentMetricsAddress: options.agentMetricsAddress,
-      erc6551RegistryAddress: options.erc6551RegistryAddress,
     };
     this.runtime = options.runtime ?? new MissingRuntime();
   }

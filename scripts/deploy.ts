@@ -73,13 +73,8 @@ async function main() {
   ]);
   console.log(`    ✓ PolicyEngine: ${policyEngine.address}`);
 
-  // 8. Deploy ERC6551Registry
-  console.log("8. Deploying ERC6551Registry...");
-  const erc6551Registry = await viem.deployContract("ERC6551Registry", []);
-  console.log(`    ✓ ERC6551Registry: ${erc6551Registry.address}`);
-
-  // 9. Deploy TaskAgents (Standard ERC-8004 agents)
-  console.log("9. Deploying TaskAgent for DataFeed Pro...");
+  // 8. Deploy TaskAgents (Standard ERC-8004 agents)
+  console.log("8. Deploying TaskAgent for DataFeed Pro...");
   const taskAgentDataFeedPro = await viem.deployContract(
     "TaskAgent",
     [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
@@ -87,7 +82,7 @@ async function main() {
   );
   console.log(`    ✓ TaskAgent (DataFeed Pro): ${taskAgentDataFeedPro.address}`);
 
-  console.log("10. Deploying TaskAgent for NewService...");
+  console.log("9. Deploying TaskAgent for NewService...");
   const taskAgentNewService = await viem.deployContract(
     "TaskAgent",
     [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
@@ -95,7 +90,7 @@ async function main() {
   );
   console.log(`    ✓ TaskAgent (NewService): ${taskAgentNewService.address}`);
 
-  console.log("11. Deploying TaskAgent for SuspiciousAgent...");
+  console.log("10. Deploying TaskAgent for SuspiciousAgent...");
   const taskAgentSuspiciousAgent = await viem.deployContract(
     "TaskAgent",
     [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
@@ -133,7 +128,6 @@ async function main() {
       TrustRegistry: trustRegistry.address,
       EscrowVault: escrowVault.address,
       PolicyEngine: policyEngine.address,
-      ERC6551Registry: erc6551Registry.address,
       TaskAgent_DataFeedPro: taskAgentDataFeedPro.address,
       TaskAgent_NewService: taskAgentNewService.address,
       TaskAgent_SuspiciousAgent: taskAgentSuspiciousAgent.address,

@@ -11,7 +11,6 @@ interface DeployedAddresses {
     EscrowVault: `0x${string}`;
     ValidationRegistry: `0x${string}`;
     PolicyEngine: `0x${string}`;
-    ERC6551Registry: `0x${string}`;
     TaskAgent_DataFeedPro: `0x${string}`;
     TaskAgent_NewService: `0x${string}`;
     TaskAgent_SuspiciousAgent: `0x${string}`;
@@ -119,17 +118,11 @@ async function main() {
     "AgentMetricsRegistry",
     deployed.contracts.AgentMetricsRegistry,
   );
-  const erc6551Registry = await viem.getContractAt(
-    "ERC6551Registry",
-    deployed.contracts.ERC6551Registry,
-  );
-
   const now = Math.floor(Date.now() / 1000);
-  const seededTbaAddresses: `0x${string}`[] = [];
 
   for (let i = 0; i < DEMO_AGENTS.length; i++) {
     const agent = DEMO_AGENTS[i];
-    const agentAddress = agentAddresses[i];
+    const agentAddress = agentAddresses[i] as `0x${string}`;
     const agentWalletClient = walletClients[i + 1];
 
     console.log(`--- Seeding ${agent.name} (target score: ${agent.targetScore}) ---`);
@@ -155,10 +148,10 @@ async function main() {
         agent.description,
         `ipfs://${agent.name.replace(/\s+/g, "").toLowerCase()}Metadata`
       ]);
-      agentId = await taskAgent.read.agentId();
+      agentId = (await taskAgent.read.agentId()) as bigint;
       console.log(`  ✓ Identity registered with Agent ID: ${agentId}`);
     } else {
-      agentId = await taskAgent.read.agentId();
+      agentId = (await taskAgent.read.agentId()) as bigint;
       console.log(`  ✓ Already registered with Agent ID: ${agentId}`);
     }
 
@@ -170,30 +163,14 @@ async function main() {
     ]);
     console.log(`  ✓ Registration timestamp set to ${agent.registrationDaysAgo} days ago`);
 
-    // Deploy TBA wallet using ERC6551Registry (wrapped in try-catch)
-    try {
-      await erc6551Registry.write.createAccount([
-        deployed.contracts.AgentIdentityRegistry,
-        agentId
-      ]);
-    } catch (err) {
-      // might be already deployed
-    }
+    console.log(`  ✓ Agent Wallet registered at EOA: ${agentAddress}`);
 
-    const tbaAddress = (await erc6551Registry.read.getAccount([
-      deployed.contracts.AgentIdentityRegistry,
-      agentId
-    ])) as `0x${string}`;
-
-    seededTbaAddresses.push(tbaAddress);
-    console.log(`  ✓ TBA Wallet deployed at: ${tbaAddress}`);
-
-    // Seed TBA wallet with 10 AVAX from deployer (Faucet simulation)
+    // Seed agent wallet with 10 AVAX from deployer (Faucet simulation)
     await deployer.sendTransaction({
-      to: tbaAddress,
+      to: agentAddress,
       value: 10000000000000000000n, // 10 AVAX
     });
-    console.log(`  ✓ Faucet seeded TBA with 10 AVAX`);
+    console.log(`  ✓ Faucet seeded EOA with 10 AVAX`);
 
     // 2. Submit real reputation reviews from multiple counterparties (against Agent ID!)
     for (let r = 0; r < agent.reviews.length; r++) {
@@ -216,10 +193,10 @@ async function main() {
     }
     console.log(`  ✓ ${agent.reviews.length} reputation reviews submitted against Agent ID: ${agentId}`);
 
-    // 3. Seed agent metrics directly on AgentMetricsRegistry (against TBA!)
+    // 3. Seed agent metrics directly on AgentMetricsRegistry (against Agent EOA Address!)
     const settledUsd18 = BigInt(agent.settledUsd) * BigInt(1e18);
     await metricsRegistry.write.seedMetrics([
-      tbaAddress,
+      agentAddress,
       [
         settledUsd18,
         BigInt(agent.txCount),
@@ -228,12 +205,12 @@ async function main() {
       ],
     ]);
     console.log(
-      `  ✓ Metrics seeded: $${agent.settledUsd} settled, ${agent.txCount} txs, ${agent.counterparties} counterparties against TBA`,
+      `  ✓ Metrics seeded: $${agent.settledUsd} settled, ${agent.txCount} txs, ${agent.counterparties} counterparties against EOA`,
     );
 
-    // 4. Compute and verify composite score (against TBA!)
-    await trustRegistry.write.getCompositeScore([tbaAddress]);
-    const cached = (await trustRegistry.read.getCachedScore([tbaAddress])) as any;
+    // 4. Compute and verify composite score (against Agent EOA Address!)
+    await trustRegistry.write.getCompositeScore([agentAddress]);
+    const cached = (await trustRegistry.read.getCachedScore([agentAddress])) as any;
     const score = Number(cached.score !== undefined ? cached.score : cached[0]);
     console.log(`  ✓ Composite score: ${score} (target: ${agent.targetScore})`);
     console.log("");

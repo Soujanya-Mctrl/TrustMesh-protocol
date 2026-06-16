@@ -54,57 +54,6 @@ export const providerProfiles: Record<string, ProviderProfile> = {
   },
 };
 
-export async function initializeTbaAddresses(rpcUrl = "http://127.0.0.1:8545") {
-  if (!deployed || !deployed.contracts.ERC6551Registry) {
-    return;
-  }
-
-  const client = createPublicClient({
-    transport: http(rpcUrl),
-  });
-
-  const REGISTRY_ABI = parseAbi([
-    "function getAccount(address tokenContract, uint256 tokenId) external view returns (address)",
-  ]);
-
-  try {
-    const registryAddr = deployed.contracts.ERC6551Registry as `0x${string}`;
-    const tokenAddr = deployed.contracts.AgentIdentityRegistry as `0x${string}`;
-
-    const tba0 = await client.readContract({
-      address: registryAddr,
-      abi: REGISTRY_ABI,
-      functionName: "getAccount",
-      args: [tokenAddr, 1n],
-    }) as `0x${string}`;
-
-    const tba1 = await client.readContract({
-      address: registryAddr,
-      abi: REGISTRY_ABI,
-      functionName: "getAccount",
-      args: [tokenAddr, 2n],
-    }) as `0x${string}`;
-
-    const tba2 = await client.readContract({
-      address: registryAddr,
-      abi: REGISTRY_ABI,
-      functionName: "getAccount",
-      args: [tokenAddr, 3n],
-    }) as `0x${string}`;
-
-    if (tba0 && tba0 !== "0x0000000000000000000000000000000000000000") {
-      providerProfiles.dataFeedPro.walletAddress = tba0;
-    }
-    if (tba1 && tba1 !== "0x0000000000000000000000000000000000000000") {
-      providerProfiles.newService.walletAddress = tba1;
-    }
-    if (tba2 && tba2 !== "0x0000000000000000000000000000000000000000") {
-      providerProfiles.suspiciousAgent.walletAddress = tba2;
-    }
-  } catch (err) {
-    console.error("Failed to query TBA addresses from registry:", err);
-  }
-}
 
 export function listProviderProfiles(): ProviderProfile[] {
   return Object.values(providerProfiles);

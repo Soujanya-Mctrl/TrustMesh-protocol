@@ -50,7 +50,6 @@ export interface TrustMeshClientConfig {
   trustRegistryAddress: `0x${string}`;
   escrowVaultAddress?: `0x${string}`;
   agentMetricsAddress?: `0x${string}`;
-  erc6551RegistryAddress?: `0x${string}`;
 }
 
 export interface TrustMeshRequest {

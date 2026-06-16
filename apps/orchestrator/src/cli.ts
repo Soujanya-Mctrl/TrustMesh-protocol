@@ -32,7 +32,6 @@ const runtime = new ViemRuntime({
   trustRegistryAddress: deployed.contracts.TrustRegistry,
   escrowVaultAddress: deployed.contracts.EscrowVault,
   agentMetricsAddress: deployed.contracts.AgentMetricsRegistry,
-  erc6551RegistryAddress: deployed.contracts.ERC6551Registry,
 });
 
 const client = new TrustMeshClient({
@@ -42,7 +41,6 @@ const client = new TrustMeshClient({
   trustRegistryAddress: deployed.contracts.TrustRegistry,
   escrowVaultAddress: deployed.contracts.EscrowVault,
   agentMetricsAddress: deployed.contracts.AgentMetricsRegistry,
-  erc6551RegistryAddress: deployed.contracts.ERC6551Registry,
   runtime,
 });
 

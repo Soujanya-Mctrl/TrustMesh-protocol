@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   providerProfiles,
-  initializeTbaAddresses,
   executeDataFeedPro,
   executeNewService,
   executeSuspiciousAgent
