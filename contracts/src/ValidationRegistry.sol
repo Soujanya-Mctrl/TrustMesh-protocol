@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./IdentityRegistry.sol";
@@ -86,6 +86,14 @@ contract ValidationRegistry is IValidationRegistry, Ownable {
     // validatorAddress => array of request hashes
     mapping(address => bytes32[]) private _validatorRequests;
 
+    mapping(address => bool) public authorizedWriters;
+    event WriterAuthorizationChanged(address indexed writer, bool authorized);
+
+    function setAuthorizedWriter(address writer, bool ok) external onlyOwner {
+        authorizedWriters[writer] = ok;
+        emit WriterAuthorizationChanged(writer, ok);
+    }
+
     constructor(address _identityRegistry) Ownable(msg.sender) {
         identityRegistry = IIdentityRegistry(_identityRegistry);
     }
@@ -130,7 +138,12 @@ contract ValidationRegistry is IValidationRegistry, Ownable {
     ) external {
         ValidationStatus storage status = _validations[requestHash];
         require(status.lastUpdate > 0, "Request does not exist");
-        require(status.validatorAddress == msg.sender, "Not the designated validator");
+        require(
+            status.validatorAddress == msg.sender || 
+            msg.sender == owner() || 
+            authorizedWriters[msg.sender], 
+            "Not the designated validator"
+        );
         require(response <= 100, "Response must be 0-100");
 
         status.response = response;

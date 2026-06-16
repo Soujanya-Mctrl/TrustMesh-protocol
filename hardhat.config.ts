@@ -1,6 +1,14 @@
 import hardhatToolboxViem from "@nomicfoundation/hardhat-toolbox-viem";
 import { configVariable, defineConfig } from "hardhat/config";
 
+try {
+  process.loadEnvFile();
+} catch (err: any) {
+  if (err.code !== "ENOENT") {
+    throw err;
+  }
+}
+
 export default defineConfig({
   plugins: [hardhatToolboxViem],
   paths: {

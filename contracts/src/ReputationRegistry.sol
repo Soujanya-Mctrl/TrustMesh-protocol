@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./IdentityRegistry.sol";
@@ -169,7 +169,7 @@ contract ReputationRegistry is IReputationRegistry, Ownable {
     /// @notice Revoke previously submitted feedback
     function revokeFeedback(uint256 agentId, uint64 feedbackIndex) external {
         FeedbackEntry storage entry = _feedback[agentId][msg.sender][feedbackIndex];
-        require(entry.valueDecimals > 0 || entry.value != 0, "Feedback does not exist");
+        require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][msg.sender], "Feedback does not exist");
         require(!entry.isRevoked, "Already revoked");
 
         entry.isRevoked = true;
@@ -184,8 +184,7 @@ contract ReputationRegistry is IReputationRegistry, Ownable {
         string calldata responseURI,
         bytes32 responseHash
     ) external {
-        FeedbackEntry storage entry = _feedback[agentId][clientAddress][feedbackIndex];
-        require(entry.valueDecimals > 0 || entry.value != 0, "Feedback does not exist");
+        require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][clientAddress], "Feedback does not exist");
 
         _responses[agentId][clientAddress][feedbackIndex][msg.sender]++;
 

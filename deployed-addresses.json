@@ -1,18 +1,18 @@
 {
-  "deployedAt": "2026-06-15T18:21:40.677Z",
+  "deployedAt": "2026-06-16T12:48:34.804Z",
   "contracts": {
-    "AgentIdentityRegistry": "0x4a679253410272dd5232b3ff7cf5dbb88f295319",
-    "ReputationRegistry": "0x7a2088a1bfc9d81c55368ae168c2c02570cb814f",
-    "ValidationRegistry": "0x09635f643e140090a9a8dcd712ed6285858cebef",
-    "IdentityRegistry8004": "0x4a679253410272dd5232b3ff7cf5dbb88f295319",
-    "ReputationRegistry8004": "0x7a2088a1bfc9d81c55368ae168c2c02570cb814f",
-    "ValidationRegistry8004": "0x09635f643e140090a9a8dcd712ed6285858cebef",
-    "AgentMetricsRegistry": "0xc5a5c42992decbae36851359345fe25997f5c42d",
-    "TrustRegistry": "0x67d269191c92caf3cd7723f116c85e6e9bf55933",
-    "EscrowVault": "0xe6e340d132b5f46d1e472debcd681b2abc16e57e",
-    "PolicyEngine": "0xc3e53f4d16ae77db1c982e75a937b9f60fe63690",
-    "TaskAgent_DataFeedPro": "0x948b3c65b89df0b4894abe91e6d02fe579834f8f",
-    "TaskAgent_NewService": "0x8438ad1c834623cff278ab6829a248e37c2d7e3f",
-    "TaskAgent_SuspiciousAgent": "0xcba6b9a951749b8735c603e7ffc5151849248772"
+    "AgentIdentityRegistry": "0xcd8a1c3ba11cf5ecfa6267617243239504a98d90",
+    "ReputationRegistry": "0x82e01223d51eb87e16a03e24687edf0f294da6f1",
+    "ValidationRegistry": "0x2bdcc0de6be1f7d2ee689a0342d76f52e8efaba3",
+    "IdentityRegistry8004": "0xcd8a1c3ba11cf5ecfa6267617243239504a98d90",
+    "ReputationRegistry8004": "0x82e01223d51eb87e16a03e24687edf0f294da6f1",
+    "ValidationRegistry8004": "0x2bdcc0de6be1f7d2ee689a0342d76f52e8efaba3",
+    "AgentMetricsRegistry": "0x7969c5ed335650692bc04293b07f5bf2e7a673c0",
+    "TrustRegistry": "0x7bc06c482dead17c0e297afbc32f6e63d3846650",
+    "EscrowVault": "0xc351628eb244ec633d5f21fbd6621e1a683b1181",
+    "PolicyEngine": "0xfd471836031dc5108809d173a067e8486b9047a3",
+    "TaskAgent_DataFeedPro": "0xc6ba8c3233ecf65b761049ef63466945c362edd2",
+    "TaskAgent_NewService": "0x94b75aa39bec4cb15e7b9593c315af203b7b847f",
+    "TaskAgent_SuspiciousAgent": "0x71f043a9072b5ec430c0a1dd766e1c8c613edc5d"
   }
 }

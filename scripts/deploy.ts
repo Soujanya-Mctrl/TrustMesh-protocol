@@ -109,6 +109,10 @@ async function main() {
   await metricsRegistry.write.authorizeSettler([policyEngine.address, true]);
   console.log("    ✓ PolicyEngine authorized as settler on AgentMetricsRegistry");
 
+  // Authorize PolicyEngine as writer on ValidationRegistry (to resolve validations via humanApprove)
+  await validationRegistry.write.setAuthorizedWriter([policyEngine.address, true]);
+  console.log("    ✓ PolicyEngine authorized as writer on ValidationRegistry");
+
   // Authorize deployer as facilitator on PolicyEngine (for direct settlement recording)
   await policyEngine.write.addFacilitator([deployer.account.address]);
   console.log(`    ✓ Deployer (${deployer.account.address}) authorized as facilitator on PolicyEngine`);

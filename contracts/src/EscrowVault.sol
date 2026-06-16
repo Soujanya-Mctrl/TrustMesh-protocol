@@ -86,21 +86,19 @@ contract EscrowVault {
         require(e.state == EscrowState.Pending, "not pending");
         require(msg.sender == e.payee, "only payee");
 
-        bool matched = (deliverableHash == e.expectedHash);
-        emit DeliverableSubmitted(escrowId, msg.sender, deliverableHash, matched);
+        require(deliverableHash == e.expectedHash, "Hash mismatch");
+        emit DeliverableSubmitted(escrowId, msg.sender, deliverableHash, true);
 
-        if (matched) {
-            e.state = EscrowState.Released;
-            openCount--;
-            uint256 amount = e.amount;
-            e.amount = 0;
-            _safeTransfer(e.payee, amount);
-            emit EscrowReleased(escrowId, e.payee, amount);
+        e.state = EscrowState.Released;
+        openCount--;
+        uint256 amount = e.amount;
+        e.amount = 0;
+        _safeTransfer(e.payee, amount);
+        emit EscrowReleased(escrowId, e.payee, amount);
 
-            if (AGENT_METRICS_REGISTRY != address(0)) {
-                // best-effort metrics recording; settledUsd18 not available here
-                IAgentMetricsRegistry(AGENT_METRICS_REGISTRY).recordSettlement(e.payer, e.payee, amount, 0);
-            }
+        if (AGENT_METRICS_REGISTRY != address(0)) {
+            // best-effort metrics recording; settledUsd18 not available here
+            IAgentMetricsRegistry(AGENT_METRICS_REGISTRY).recordSettlement(e.payer, e.payee, amount, 0);
         }
     }
 

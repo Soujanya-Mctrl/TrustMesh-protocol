@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -242,6 +242,7 @@ contract IdentityRegistry is ERC721URIStorage, IIdentityRegistry {
 
     /// @notice Set/override registration timestamp for agentId (for testing/seeding)
     function setRegistrationTime(uint256 agentId, uint256 timestamp) external {
+        ownerOf(agentId); // Reverts if token doesn't exist
         require(msg.sender == admin || isAuthorized(agentId, msg.sender), "Not authorized");
         _registeredAt[agentId] = timestamp;
     }

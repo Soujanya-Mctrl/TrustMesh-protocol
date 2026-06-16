@@ -9,14 +9,10 @@ interface IIdentityRegistry {
 interface IReputationRegistry {
     function getSummary(
         uint256 agentId,
-        address[] calldata reviewers,
+        address[] calldata clientAddresses,
         string calldata tag1,
-        string calldata endpoint
-    ) external view returns (
-        uint64 feedbackCount,
-        int128 averageRating,
-        int128 variance
-    );
+        string calldata tag2
+    ) external view returns (uint64 count, int128 summaryValue, uint8 summaryValueDecimals);
 }
 
 interface IAgentMetricsRegistry {
@@ -77,7 +73,7 @@ contract TrustRegistry {
             agentId = IIdentityRegistry(IDENTITY_REGISTRY).getAgentIdByWallet(agentAddress);
         }
 
-        bool registered = (agentId != 0 || (IDENTITY_REGISTRY == address(0) && seededRegistered[agentAddress]));
+        bool registered = (agentId != 0 || seededRegistered[agentAddress]);
 
         if (!registered) {
             cache[agentAddress].score = 0;
