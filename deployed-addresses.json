@@ -1,4 +1,5 @@
 {
+  "network": "fuji",
   "deployedAt": "2026-06-16T13:13:40.823Z",
   "contracts": {
     "AgentIdentityRegistry": "0xec7148212bbed46b18f16e2904861f128fae5f6c",

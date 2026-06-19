@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 async function main() {
   console.log("=== TrustMesh ERC-8004 & Policy Engine Unified Deployment ===\n");
 
-  const { viem } = await hre.network.getOrCreate();
+  const net = await hre.network.getOrCreate();
+  const { viem } = net;
   const walletClients = await viem.getWalletClients();
 
   const deployer = walletClients[0];
@@ -119,7 +120,7 @@ async function main() {
 
   // Write deployed addresses to file
   const addresses = {
-    network: (hre.network as any).name,
+    network: net.networkName,
     deployedAt: new Date().toISOString(),
     contracts: {
       AgentIdentityRegistry: identityRegistry.address, // Alias for backward compatibility

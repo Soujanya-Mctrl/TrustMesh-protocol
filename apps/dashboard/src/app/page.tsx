@@ -6,7 +6,8 @@ import {
   createWalletClient, 
   custom, 
   http, 
-  formatEther, 
+  parseEther,
+  parseAbi,
   type Address 
 } from "viem";
 import { avalancheFuji, hardhat } from "viem/chains";
@@ -15,15 +16,28 @@ import {
   Activity, 
   AlertTriangle, 
   Wallet, 
-  CheckCircle, 
-  XCircle, 
   RefreshCw, 
+  WifiOff,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  Search,
+  ChevronRight,
+  Terminal,
+  Copy,
+  Check,
   ExternalLink,
-  Star,
-  Clock
+  Sliders,
+  Settings,
+  Radio,
+  HelpCircle,
+  TrendingUp,
+  Cpu
 } from "lucide-react";
+import { useTrustMeshEvents } from "../hooks/useTrustMeshEvents";
 
-// Minimal ABIs to fetch data
+// Minimal ABIs to fetch initial data
 const TrustRegistryABI = [
   {
     inputs: [{ name: "agentAddress", type: "address" }],
@@ -34,59 +48,6 @@ const TrustRegistryABI = [
       { name: "sybilFlagged", type: "bool" },
       { name: "cachedAt", type: "uint32" }
     ],
-    stateMutability: "view",
-    type: "function"
-  }
-] as const;
-
-const ReputationRegistryABI = [
-  {
-    inputs: [
-      { name: "agentId", type: "uint256" },
-      { name: "clientAddresses", type: "address[]" },
-      { name: "tag1", type: "string" },
-      { name: "tag2", type: "string" }
-    ],
-    name: "getSummary",
-    outputs: [
-      { name: "count", type: "uint64" },
-      { name: "summaryValue", type: "int128" },
-      { name: "summaryValueDecimals", type: "uint8" }
-    ],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [
-      { name: "agentId", type: "uint256" },
-      { name: "clientAddress", type: "address" },
-      { name: "feedbackIndex", type: "uint64" }
-    ],
-    name: "readFeedback",
-    outputs: [
-      { name: "value", type: "int128" },
-      { name: "valueDecimals", type: "uint8" },
-      { name: "tag1", type: "string" },
-      { name: "tag2", type: "string" },
-      { name: "isRevoked", type: "bool" }
-    ],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [{ name: "agentId", type: "uint256" }],
-    name: "getClients",
-    outputs: [{ name: "", type: "address[]" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [
-      { name: "agentId", type: "uint256" },
-      { name: "clientAddress", type: "address" }
-    ],
-    name: "getLastIndex",
-    outputs: [{ name: "", type: "uint64" }],
     stateMutability: "view",
     type: "function"
   }
@@ -129,79 +90,38 @@ const ValidationRegistryABI = [
   }
 ] as const;
 
-const AgentMetricsRegistryABI = [
+const PolicyEngineABI = [
   {
-    inputs: [{ name: "agent", type: "address" }],
-    name: "getMetrics",
-    outputs: [
-      {
-        components: [
-          { name: "settledVolumeUsd18", type: "uint256" },
-          { name: "totalSettledTransactions", type: "uint64" },
-          { name: "microTransactionCount", type: "uint64" },
-          { name: "distinctCounterpartyCount", type: "uint32" }
-        ],
-        name: "",
-        type: "tuple"
-      }
+    inputs: [
+      { name: "requestHash", type: "bytes32" },
+      { name: "passed", type: "bool" }
     ],
-    stateMutability: "view",
+    name: "humanApprove",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function"
   }
 ] as const;
 
-interface AgentState {
-  id: number;
-  name: string;
-  address: Address;
-  description: string;
-  score: number;
-  unregistered: boolean;
-  sybilFlagged: boolean;
-  settledVolume: string;
-  txCount: number;
-  microTxCount: number;
-  counterparties: number;
-  feedbackCount: number;
-  averageRating: number;
-}
-
-const AGENTS_METADATA = [
-  {
-    id: 1,
-    name: "DataFeed Pro",
-    address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as Address,
-    description: "Premium high-frequency market data feed provider."
-  },
-  {
-    id: 2,
-    name: "NewService",
-    address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" as Address,
-    description: "Recently launched localization and translation service."
-  },
-  {
-    id: 3,
-    name: "SuspiciousAgent",
-    address: "0x90F79bf6EB2c4f870365E785982E1f101E93b906" as Address,
-    description: "Algorithmic trader performing arbitrage and analysis."
-  }
-];
-
-// Seeded pending review details
-const PENDING_VALIDATION_HASH = "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e" as `0x${string}`;
-
 export default function DashboardPage() {
   const [deployed, setDeployed] = useState<any>(null);
-  const [agents, setAgents] = useState<AgentState[]>([]);
-  const [pendingValidation, setPendingValidation] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const isFuji = !deployed?.network || deployed.network === "fuji";
+  const networkName = isFuji ? "Fuji" : "Localhost";
   const [account, setAccount] = useState<Address | null>(null);
-  const [networkType, setNetworkType] = useState<string>("localhost");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [prompts, setPrompts] = useState<Record<number, string>>({});
+  const [executingAgentId, setExecutingAgentId] = useState<number | null>(null);
+  const [executionResult, setExecutionResult] = useState<Record<number, any>>({});
+  
+  // Custom redesign states
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [copiedAgentId, setCopiedAgentId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
-  // Load deployed addresses from api
+  // Fetch deployed addresses configuration on mount
   useEffect(() => {
     async function loadAddresses() {
       try {
@@ -210,236 +130,30 @@ export default function DashboardPage() {
         if (data.error) throw new Error(data.error);
         setDeployed(data);
       } catch (err: any) {
-        setErrorMessage(`Addresses file error: ${err.message}`);
-        setLoading(false);
+        setErrorMessage(`Failed to load contract configuration: ${err.message}`);
       }
     }
     loadAddresses();
+
+    // Theme initialization
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else {
+      setTheme("dark");
+    }
   }, []);
 
-  // Fetch all contract states
-  async function fetchBlockchainData() {
-    if (!deployed) return;
-    setLoading(true);
-    setErrorMessage(null);
+  // Initialize WebSockets hook
+  const { events, providers, activeEscalation, isConnected } = useTrustMeshEvents(deployed);
 
-    try {
-      const isFuji = deployed.network === "fuji" || window.ethereum !== undefined; 
-      setNetworkType(deployed.network ?? "localhost");
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    localStorage.setItem("theme", nextTheme);
+  };
 
-      // Setup Public Client
-      const rpcUrl = deployed.network === "fuji" 
-        ? "https://api.avax-test.network/ext/bc/C/rpc"
-        : "http://127.0.0.1:8545";
-
-      const chain = deployed.network === "fuji" ? avalancheFuji : hardhat;
-      const client = createPublicClient({
-        chain,
-        transport: http(rpcUrl),
-      });
-
-      // 1. Fetch Agents metrics, scores, reviews
-      const updatedAgents: AgentState[] = [];
-      const allFeedback: any[] = [];
-
-      for (const meta of AGENTS_METADATA) {
-        // Read Trust Score
-        let score = 100;
-        let sybilFlagged = false;
-        let unregistered = false;
-
-        try {
-          const cached = await client.readContract({
-            address: deployed.contracts.TrustRegistry,
-            abi: TrustRegistryABI,
-            functionName: "getCachedScore",
-            args: [meta.address],
-          });
-          score = Number(cached[0]);
-          unregistered = cached[1];
-          sybilFlagged = cached[2];
-        } catch (err) {
-          console.warn(`Failed reading score for ${meta.name}`, err);
-        }
-
-        // Read metrics
-        let settledVolume = "0";
-        let txCount = 0;
-        let microTxCount = 0;
-        let counterparties = 0;
-
-        try {
-          const m = await client.readContract({
-            address: deployed.contracts.AgentMetricsRegistry,
-            abi: AgentMetricsRegistryABI,
-            functionName: "getMetrics",
-            args: [meta.address],
-          });
-          settledVolume = formatEther(m.settledVolumeUsd18);
-          txCount = Number(m.totalSettledTransactions);
-          microTxCount = Number(m.microTransactionCount);
-          counterparties = m.distinctCounterpartyCount;
-        } catch (err) {
-          console.warn(`Failed reading metrics for ${meta.name}`, err);
-        }
-
-        // Read reputation summary
-        let feedbackCount = 0;
-        let averageRating = 0;
-
-        try {
-          const summary = await client.readContract({
-            address: deployed.contracts.ReputationRegistry,
-            abi: ReputationRegistryABI,
-            functionName: "getSummary",
-            args: [BigInt(meta.id), [], "", ""],
-          });
-          feedbackCount = Number(summary[0]);
-          averageRating = Number(summary[1]);
-        } catch (err) {
-          console.warn(`Failed reading reputation for ${meta.name}`, err);
-        }
-
-        // Fetch detailed feedback entries for feedback feed
-        try {
-          const clients = await client.readContract({
-            address: deployed.contracts.ReputationRegistry,
-            abi: ReputationRegistryABI,
-            functionName: "getClients",
-            args: [BigInt(meta.id)]
-          }) as Address[];
-
-          for (const cl of clients) {
-            const lastIdx = await client.readContract({
-              address: deployed.contracts.ReputationRegistry,
-              abi: ReputationRegistryABI,
-              functionName: "getLastIndex",
-              args: [BigInt(meta.id), cl]
-            }) as bigint;
-
-            for (let f = 1n; f <= lastIdx; f++) {
-              const fb = await client.readContract({
-                address: deployed.contracts.ReputationRegistry,
-                abi: ReputationRegistryABI,
-                functionName: "readFeedback",
-                args: [BigInt(meta.id), cl, f]
-              }) as any;
-
-              if (!fb[4]) { // not revoked
-                allFeedback.push({
-                  agentName: meta.name,
-                  client: cl,
-                  rating: Number(fb[0]),
-                  tag: fb[2],
-                  comment: fb[3],
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.warn(`Failed detailed reviews fetch for ${meta.name}`, err);
-        }
-
-        updatedAgents.push({
-          ...meta,
-          score,
-          unregistered,
-          sybilFlagged,
-          settledVolume,
-          txCount,
-          microTxCount,
-          counterparties,
-          feedbackCount,
-          averageRating
-        });
-      }
-
-      setAgents(updatedAgents);
-      setReviews(allFeedback);
-
-      // 2. Fetch pending validation request dynamically for PolicyEngine
-      try {
-        const requests = await client.readContract({
-          address: deployed.contracts.ValidationRegistry,
-          abi: [
-            {
-              inputs: [{ name: "validatorAddress", type: "address" }],
-              name: "getValidatorRequests",
-              outputs: [{ name: "requestHashes", type: "bytes32[]" }],
-              stateMutability: "view",
-              type: "function"
-            }
-          ] as const,
-          functionName: "getValidatorRequests",
-          args: [deployed.contracts.PolicyEngine],
-        }) as `0x${string}`[];
-
-        let activeHash = PENDING_VALIDATION_HASH;
-        let isComplete = false;
-
-        // Loop from the end to find the first incomplete one
-        for (let idx = requests.length - 1; idx >= 0; idx--) {
-          const rHash = requests[idx];
-          const complete = await client.readContract({
-            address: deployed.contracts.ValidationRegistry,
-            abi: ValidationRegistryABI,
-            functionName: "isValidationComplete",
-            args: [rHash],
-          }) as boolean;
-
-          if (!complete) {
-            activeHash = rHash;
-            isComplete = false;
-            break;
-          }
-        }
-
-        // If no incomplete requests, just show the latest request
-        if (requests.length > 0 && activeHash === PENDING_VALIDATION_HASH) {
-          const latestHash = requests[requests.length - 1];
-          const complete = await client.readContract({
-            address: deployed.contracts.ValidationRegistry,
-            abi: ValidationRegistryABI,
-            functionName: "isValidationComplete",
-            args: [latestHash],
-          }) as boolean;
-          activeHash = latestHash;
-          isComplete = complete;
-        }
-
-        const valStatus = await client.readContract({
-          address: deployed.contracts.ValidationRegistry,
-          abi: ValidationRegistryABI,
-          functionName: "getValidationStatus",
-          args: [activeHash],
-        }) as any;
-
-        setPendingValidation({
-          hash: activeHash,
-          validator: valStatus[0],
-          agentId: Number(valStatus[1]),
-          response: valStatus[2],
-          lastUpdate: Number(valStatus[5]),
-          isComplete,
-        });
-      } catch (err) {
-        console.warn("Failed reading pending validation status", err);
-      }
-
-    } catch (err: any) {
-      setErrorMessage(`Network connection error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (deployed) {
-      fetchBlockchainData();
-    }
-  }, [deployed]);
-
-  // Connect Web3 Wallet
+  // Connect Web3 Wallet (MetaMask)
   async function connectWallet() {
     if (typeof window === "undefined" || !window.ethereum) {
       alert("Please install MetaMask or another Web3 wallet provider.");
@@ -447,8 +161,10 @@ export default function DashboardPage() {
     }
 
     try {
+      const isFuji = !deployed?.network || deployed.network === "fuji";
+      const chain = isFuji ? avalancheFuji : hardhat;
       const client = createWalletClient({
-        chain: deployed?.network === "fuji" ? avalancheFuji : hardhat,
+        chain,
         transport: custom(window.ethereum),
       });
 
@@ -459,335 +175,811 @@ export default function DashboardPage() {
     }
   }
 
-  // Resolve Human Review validation response
-  async function resolveValidation(passed: boolean) {
+  // Handle service request triggers directly in-browser
+  async function handleRequestService(agentId: number) {
+    const prompt = prompts[agentId]?.trim();
+    if (!prompt) {
+      alert("Please enter a prompt first.");
+      return;
+    }
     if (!account) {
       alert("Please connect your wallet first.");
       return;
     }
     if (!deployed) return;
 
-    setSubmitting(true);
+    setExecutingAgentId(agentId);
+    setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Evaluating routing tier..." } }));
+
     try {
-      // Connect as Wallet Client
+      const meta = providers.find(p => p.id === agentId)!;
+      const rpcUrl = !deployed.network || deployed.network === "fuji"
+        ? "https://api.avax-test.network/ext/bc/C/rpc"
+        : "http://127.0.0.1:8545";
+
+      const chain = !deployed.network || deployed.network === "fuji" ? avalancheFuji : hardhat;
+      const publicClient = createPublicClient({
+        chain,
+        transport: http(rpcUrl),
+      });
+
       const walletClient = createWalletClient({
         account,
-        chain: deployed.network === "fuji" ? avalancheFuji : hardhat,
+        chain,
         transport: custom(window.ethereum),
       });
 
-      // Submit on-chain response
-      const scoreResponse = passed ? 100 : 0;
-      console.log(`Submitting validation response: ${scoreResponse}`);
+      const tier = meta.tier;
+      const amount = agentId === 1 ? parseEther("0.001") : agentId === 2 ? parseEther("0.002") : parseEther("0.0005");
+      const serviceUrl = agentId === 1 ? "http://localhost:3001/request-service" : agentId === 2 ? "http://localhost:3002/request-service" : "http://localhost:3003/request-service";
 
-      const hash = await walletClient.writeContract({
-        address: deployed.contracts.ValidationRegistry,
-        abi: ValidationRegistryABI,
-        functionName: "validationResponse",
+      setExecutionResult(prev => ({ 
+        ...prev, 
+        [agentId]: { status: `Processing payment for ${meta.name} (Tier ${tier})...` } 
+      }));
+
+      if (tier === 0) {
+        // --- Tier 0: Direct Transfer ---
+        const txHash = await walletClient.sendTransaction({
+          to: meta.address,
+          value: amount,
+        });
+        
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Awaiting settlement..." } }));
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Executing task..." } }));
+        const response = await fetch(serviceUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-PAYMENT": JSON.stringify({ txHash, network: "avalanche-fuji", payer: account }),
+          },
+          body: JSON.stringify({ serviceRequest: { type: "execute", prompt } }),
+        });
+        const res = await response.json();
+        
+        // Record direct settlement on-chain
+        try {
+          const recordABI = parseAbi([
+            "function recordDirectSettlement(address payer, address payee, uint256 amountAvax, uint256 settledUsd18) external"
+          ]);
+          await walletClient.writeContract({
+            address: deployed.contracts.PolicyEngine,
+            abi: recordABI,
+            functionName: "recordDirectSettlement",
+            args: [account, meta.address, amount, 0n],
+          });
+        } catch {}
+
+        setExecutionResult(prev => ({ 
+          ...prev, 
+          [agentId]: { 
+            status: "Complete", 
+            output: res.output 
+          } 
+        }));
+
+      } else if (tier === 1) {
+        // --- Tier 1: Commit-Lock-Reveal Escrow ---
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Securing funds..." } }));
+        
+        // Fetch quote deliverable hash
+        const quoteRes = await fetch(serviceUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serviceRequest: { type: "quote", prompt } }),
+        });
+        const quote = await quoteRes.json();
+        const deliverableHash = quote.deliverableHash;
+
+        if (!deliverableHash) throw new Error("Agent failed to return deliverable hash");
+
+        // Create escrow
+        const escrowABI = parseAbi([
+          "function createEscrow(address payee, bytes32 expectedHash) external payable returns (uint256)"
+        ]);
+        const txHash = await walletClient.writeContract({
+          address: deployed.contracts.EscrowVault,
+          abi: escrowABI,
+          functionName: "createEscrow",
+          args: [meta.address, deliverableHash],
+          value: amount,
+        });
+
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Awaiting escrow lock..." } }));
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Executing task..." } }));
+        const executeRes = await fetch(serviceUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-PAYMENT": JSON.stringify({ txHash, network: "avalanche-fuji", payer: account }),
+          },
+          body: JSON.stringify({ serviceRequest: { type: "execute", prompt } }),
+        });
+        const res = await executeRes.json();
+
+        setExecutionResult(prev => ({ 
+          ...prev, 
+          [agentId]: { 
+            status: "Complete", 
+            output: res.output 
+          } 
+        }));
+
+      } else {
+        // --- Tier 2: Simulation ---
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Initiating Policy Engine evaluation..." } }));
+        
+        // Execute decideAndEmit on PolicyEngine to trigger the validation check on-chain
+        const decideABI = parseAbi([
+          "function decideAndEmit(address payer, address payee, uint256 amountAvax) external returns (uint8)"
+        ]);
+        
+        const txHash = await walletClient.writeContract({
+          address: deployed.contracts.PolicyEngine,
+          abi: decideABI,
+          functionName: "decideAndEmit",
+          args: [account, meta.address, amount],
+        });
+
+        setExecutionResult(prev => ({ ...prev, [agentId]: { status: "Awaiting policy evaluation settlement..." } }));
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+        // Call agent service simulation endpoint
+        await fetch(serviceUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serviceRequest: { type: "simulation", prompt } }),
+        });
+
+        setExecutionResult(prev => ({ 
+          ...prev, 
+          [agentId]: { 
+            status: "Validation Required", 
+            message: "This transaction was flagged due to low agent trust score. Escalation required." 
+          } 
+        }));
+      }
+
+    } catch (err: any) {
+      setExecutionResult(prev => ({ 
+        ...prev, 
+        [agentId]: { status: "Failed", error: err.message } 
+      }));
+    } finally {
+      setExecutingAgentId(null);
+    }
+  }
+
+  // Resolve Human Review validation response (Approve / Reject)
+  async function resolveValidation(passed: boolean) {
+    if (!account) {
+      alert("Please connect your wallet first.");
+      return;
+    }
+    if (!deployed || !activeEscalation) return;
+
+    setSubmitting(true);
+    try {
+      const isFuji = !deployed.network || deployed.network === "fuji";
+      const walletClient = createWalletClient({
+        account,
+        chain: isFuji ? avalancheFuji : hardhat,
+        transport: custom(window.ethereum),
+      });
+
+      await walletClient.writeContract({
+        address: deployed.contracts.PolicyEngine,
+        abi: PolicyEngineABI,
+        functionName: "humanApprove",
         args: [
-          pendingValidation.hash,
-          scoreResponse,
-          "",
-          "0x0000000000000000000000000000000000000000000000000000000000000000",
-          passed ? "APPROVED" : "REJECTED"
+          activeEscalation.hash,
+          passed
         ],
       });
 
-      alert(`Validation transaction submitted! Hash: ${hash}`);
-
-      // Wait 3 seconds and reload status
-      setTimeout(() => {
-        fetchBlockchainData();
-        setSubmitting(false);
-      }, 4000);
-
+      alert(`Validation resolved! Decision broadcasted to network.`);
     } catch (err: any) {
       alert(`Transaction failed: ${err.message}`);
+    } finally {
       setSubmitting(false);
     }
   }
 
-  // Helper to color scores
-  function getScoreColorClass(score: number): string {
-    if (score >= 70) return "text-emerald-400 border-emerald-500 bg-emerald-500/10";
-    if (score >= 40) return "text-amber-400 border-amber-500 bg-amber-500/10";
-    return "text-rose-400 border-rose-500 bg-rose-500/10";
-  }
+  // Copy helper
+  const handleCopyText = (text: string, agentId: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedAgentId(agentId);
+    setTimeout(() => setCopiedAgentId(null), 2000);
+  };
+
+  // Filter providers based on search query
+  const filteredProviders = providers.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    p.status.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen p-6 md:p-12 max-w-7xl mx-auto flex flex-col gap-8">
-      {/* Header bar */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-sky-950/40 pb-6">
-        <div>
-          <h1 className="text-3xl font-extrabold flex items-center gap-3">
-            <Shield className="w-8 h-8 text-sky-400 animate-pulse" />
-            <span className="gradient-text">TrustMesh</span> Dashboard
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">ERC-8004 Agent Trust Engine & Policy Registry</p>
-        </div>
-
-        <div className="flex items-center gap-3 self-stretch md:self-auto justify-end">
-          <div className="badge badge-green">
-            <Activity className="w-3.5 h-3.5" />
-            Connected Network: {networkType.toUpperCase()}
-          </div>
-
-          <button 
-            onClick={connectWallet}
-            className="btn-secondary text-sm flex items-center gap-2"
-          >
-            <Wallet className="w-4 h-4 text-sky-400" />
-            {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "Connect Wallet"}
-          </button>
-
-          <button 
-            onClick={fetchBlockchainData}
-            disabled={loading}
-            className="p-2.5 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition text-sky-400"
-            title="Refresh Data"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </header>
-
-      {errorMessage && (
-        <div className="glass-card border-rose-500/30 bg-rose-500/5 text-rose-300 p-4 rounded-xl flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-          <div className="text-sm">{errorMessage}</div>
-        </div>
-      )}
-
-      {/* Global stats overview */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in delay-1">
-        <div className="glass-card flex items-center gap-5">
-          <div className="p-4 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-            <Activity className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Settled Volume</div>
-            <div className="text-2xl font-bold mt-1 text-sky-300">
-              ${agents.reduce((sum, a) => sum + parseFloat(a.settledVolume), 0).toLocaleString(undefined, {maximumFractionDigits:2})} USD
+    <div className={theme === "dark" ? "dark" : ""}>
+      <div className="min-h-screen bg-zinc-50 dark:bg-[#18181B] text-zinc-900 dark:text-zinc-50 font-sans flex transition-colors duration-200">
+        
+        {/* Collapsible Left Sidebar */}
+        <aside 
+          className={`border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 transition-all duration-300 z-30
+            ${sidebarOpen ? "w-64" : "w-0 -translate-x-full md:w-16 md:translate-x-0 overflow-hidden"}`}
+        >
+          {/* Brand Header */}
+          <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="w-8 h-8 rounded bg-[#E84142] flex items-center justify-center shrink-0">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              {sidebarOpen && (
+                <span className="font-display font-bold text-sm uppercase tracking-wider text-zinc-900 dark:text-zinc-50 truncate">
+                  TrustMesh Console
+                </span>
+              )}
             </div>
+            {sidebarOpen && (
+              <button 
+                onClick={() => setSidebarOpen(false)} 
+                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-        </div>
 
-        <div className="glass-card flex items-center gap-5">
-          <div className="p-4 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            <Wallet className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Escrow Count</div>
-            <div className="text-2xl font-bold mt-1 text-purple-300">
-              {agents.reduce((sum, a) => sum + a.txCount, 0)} Transactions
+          {/* Search bar inside Sidebar */}
+          {sidebarOpen && (
+            <div className="p-3 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-zinc-400" />
+                <input 
+                  type="text" 
+                  placeholder="Filter elements..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full text-xs pl-8 pr-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-md bg-zinc-50 dark:bg-[#0E0E10] focus:outline-none focus:border-[#E84142]"
+                />
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div className="glass-card flex items-center gap-5">
-          <div className="p-4 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Active Sybil Flags</div>
-            <div className="text-2xl font-bold mt-1 text-amber-300">
-              {agents.filter(a => a.sybilFlagged).length} Registered Alerts
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Agents Identity Grid */}
-      <section className="flex flex-col gap-4 animate-fade-in delay-2">
-        <h2 className="text-xl font-bold text-slate-200">Registered Autonomous Agents</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {loading && agents.length === 0 ? (
-            <div className="col-span-3 text-center py-12 text-slate-400">Loading agent credentials from registries...</div>
-          ) : (
-            agents.map((agent) => (
-              <article key={agent.id} className="glass-card flex flex-col justify-between gap-6 relative overflow-hidden">
-                {agent.sybilFlagged && (
-                  <div className="absolute top-0 right-0 left-0 bg-rose-500/10 border-b border-rose-500/20 py-1.5 px-4 text-rose-300 text-xs font-semibold flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                    High Sybil Risk Detected (Suspicious Micro-Transactions)
-                  </div>
-                )}
-
-                <div className={`flex justify-between items-start gap-4 ${agent.sybilFlagged ? "mt-6" : ""}`}>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-100">{agent.name}</h3>
-                    <p className="text-xs text-slate-400 mt-1">{agent.description}</p>
-                  </div>
-
-                  <div className={`w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center font-bold text-lg shrink-0 ${getScoreColorClass(agent.score)}`}>
-                    {agent.score}%
-                    <span className="text-[8px] font-medium tracking-tight text-slate-400">Trust</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2.5 bg-slate-950/40 p-4 rounded-xl border border-white/5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Agent Wallet:</span>
-                    <span className="font-mono text-slate-300">{`${agent.address.slice(0, 8)}...${agent.address.slice(-6)}`}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Settled Volume:</span>
-                    <span className="font-semibold text-sky-400">${parseFloat(agent.settledVolume).toLocaleString()} USD</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Total Transactions:</span>
-                    <span className="font-semibold text-slate-300">{agent.txCount} ({agent.microTxCount} micro)</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Distinct Counterparties:</span>
-                    <span className="font-semibold text-slate-300">{agent.counterparties}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Feedback Count:</span>
-                    <span className="font-semibold text-slate-300">{agent.feedbackCount} reviews</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <a 
-                    href={`https://testnet.snowtrace.io/address/${agent.address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-secondary text-xs flex-1 justify-center py-2 hover:text-sky-300"
-                  >
-                    Explorer <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </article>
-            ))
           )}
-        </div>
-      </section>
 
-      {/* Human in the loop reviews & Feedbacks */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in delay-3">
-        {/* Human Reviews review panel */}
-        <div className="flex flex-col gap-4">
-          <h2 className="text-xl font-bold text-slate-200">Policy Engine Review Queue</h2>
-          
-          {pendingValidation ? (
-            <div className="glass-card flex flex-col justify-between gap-6 border-amber-500/30 bg-amber-500/5">
-              <div className="flex items-start gap-4">
-                <div className="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
-                  <Clock className="w-6 h-6 animate-pulse" />
-                </div>
+          {/* Navigation Tree */}
+          <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
+            <div>
+              {sidebarOpen && <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase px-2 mb-2 tracking-widest">Getting Started</p>}
+              <div className="space-y-1">
+                <button 
+                  onClick={() => setActiveTab("overview")}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-semibold tracking-tight transition-all
+                    ${activeTab === "overview" 
+                      ? "bg-[#E84142]/10 text-[#E84142] dark:bg-[#E84142]/20" 
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850"}`}
+                >
+                  <Cpu className="w-4 h-4" />
+                  {sidebarOpen && <span>Overview Dashboard</span>}
+                </button>
+                <button 
+                  onClick={() => setActiveTab("faucet")}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-semibold tracking-tight transition-all
+                    ${activeTab === "faucet" 
+                      ? "bg-[#E84142]/10 text-[#E84142] dark:bg-[#E84142]/20" 
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850"}`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  {sidebarOpen && <span>Testnet Faucet</span>}
+                </button>
+              </div>
+            </div>
 
-                <div className="flex-1 min-w-0">
+            <div>
+              {sidebarOpen && <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase px-2 mb-2 tracking-widest">Testnet Infrastructure</p>}
+              <div className="space-y-1">
+                <button 
+                  onClick={() => setActiveTab("policy")}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-semibold tracking-tight transition-all
+                    ${activeTab === "policy" 
+                      ? "bg-[#E84142]/10 text-[#E84142] dark:bg-[#E84142]/20" 
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850"}`}
+                >
                   <div className="flex items-center gap-2.5">
-                    <h3 className="text-base font-bold text-slate-100">Review Required: SuspiciousAgent</h3>
-                    <span className={`badge ${pendingValidation.isComplete ? "badge-green" : "badge-amber"}`}>
-                      {pendingValidation.isComplete ? "COMPLETE" : "PENDING REVIEW"}
-                    </span>
+                    <Sliders className="w-4 h-4" />
+                    {sidebarOpen && <span>Policy Engine</span>}
                   </div>
-                  <p className="text-xs text-slate-400 mt-1.5">
-                    The policy engine routed this agent to Tier 2 (Human Verification Required) because its trust score dropped below 40% (current: 24%) due to suspected Sybil behavior.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 flex flex-col gap-2 font-mono text-xs text-slate-300">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Request Hash:</span>
-                  <span className="text-sky-400 truncate ml-4" title={pendingValidation.hash}>{pendingValidation.hash}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Designated Reviewer:</span>
-                  <span className="truncate ml-4">{pendingValidation.validator}</span>
-                </div>
-                {pendingValidation.isComplete && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Resolution Score:</span>
-                    <span className={pendingValidation.response === 100 ? "text-emerald-400" : "text-rose-400"}>
-                      {pendingValidation.response} ({pendingValidation.response === 100 ? "APPROVED" : "REJECTED"})
-                    </span>
+                  {sidebarOpen && <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
+                </button>
+                <button 
+                  onClick={() => setActiveTab("escrow")}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-semibold tracking-tight transition-all
+                    ${activeTab === "escrow" 
+                      ? "bg-[#E84142]/10 text-[#E84142] dark:bg-[#E84142]/20" 
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Activity className="w-4 h-4" />
+                    {sidebarOpen && <span>Escrow Vault</span>}
                   </div>
-                )}
+                  {sidebarOpen && <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
+                </button>
+                <button 
+                  onClick={() => setActiveTab("validation")}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-semibold tracking-tight transition-all
+                    ${activeTab === "validation" 
+                      ? "bg-[#E84142]/10 text-[#E84142] dark:bg-[#E84142]/20" 
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Radio className="w-4 h-4" />
+                    {sidebarOpen && <span>Validation Registry</span>}
+                  </div>
+                  {sidebarOpen && <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
+                </button>
               </div>
+            </div>
 
-              {!pendingValidation.isComplete ? (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button 
-                    onClick={() => resolveValidation(true)}
-                    disabled={submitting || !account}
-                    className="btn-primary flex-1 justify-center py-3 bg-gradient-to-r from-emerald-500 to-teal-600 shadow-emerald-500/20"
-                  >
-                    <CheckCircle className="w-4 h-4" /> Approve Agent
-                  </button>
+            <div>
+              {sidebarOpen && <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase px-2 mb-2 tracking-widest">Support</p>}
+              <div className="space-y-1">
+                <a 
+                  href="https://build.avax.network/docs" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-semibold tracking-tight text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  {sidebarOpen && <span>Developer Docs</span>}
+                  <ExternalLink className="w-3 h-3 ml-auto opacity-50 shrink-0" />
+                </a>
+              </div>
+            </div>
+          </nav>
 
-                  <button 
-                    onClick={() => resolveValidation(false)}
-                    disabled={submitting || !account}
-                    className="btn-primary flex-1 justify-center py-3 bg-gradient-to-r from-rose-500 to-red-600 shadow-rose-500/20"
-                  >
-                    <XCircle className="w-4 h-4" /> Reject Agent
-                  </button>
+          {/* Sidebar Footer Utility */}
+          <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+            <button 
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850 transition"
+            >
+              {theme === "light" ? (
+                <>
+                  <Moon className="w-4 h-4 text-zinc-500" />
+                  {sidebarOpen && <span>Dark Theme</span>}
+                </>
+              ) : (
+                <>
+                  <Sun className="w-4 h-4 text-amber-500" />
+                  {sidebarOpen && <span>Light Theme</span>}
+                </>
+              )}
+            </button>
+
+            {sidebarOpen && (
+              <div className="flex items-center gap-1.5 px-2 text-[10px] font-bold uppercase text-emerald-500">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping shrink-0" />
+                <span>{networkName} Connected</span>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-grid-pattern">
+          
+          {/* Top Header */}
+          <header className="h-16 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 md:px-8 flex items-center justify-between sticky top-0 z-20 transition-colors">
+            <div className="flex items-center gap-3">
+              {!sidebarOpen && (
+                <button 
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+              )}
+              {/* Breadcrumbs */}
+              <div className="flex items-center gap-2 text-xs font-semibold tracking-tight text-zinc-500 dark:text-zinc-400">
+                <span>Console</span>
+                <ChevronRight className="w-3 h-3" />
+                <span className="text-zinc-900 dark:text-zinc-100 font-bold uppercase">
+                  {activeTab === "overview" && "Overview"}
+                  {activeTab === "faucet" && "Testnet Faucet"}
+                  {activeTab === "policy" && "Policy Engine"}
+                  {activeTab === "escrow" && "Escrow Vault"}
+                  {activeTab === "validation" && "Validation Registry"}
+                </span>
+              </div>
+            </div>
+
+            {/* Header Right Actions */}
+            <div className="flex items-center gap-4">
+              
+              {/* WebSocket Reconnection Status */}
+              {!isConnected ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+                  <span className="hidden md:inline">Reconnecting</span>
                 </div>
               ) : (
-                <div className="text-center p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2">
-                  <CheckCircle className="w-4 h-4" /> This validation request has been successfully resolved on-chain!
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="hidden md:inline">Live Stream Active</span>
                 </div>
               )}
 
-              {!account && !pendingValidation.isComplete && (
-                <p className="text-[10px] text-center text-rose-400 font-medium">
-                  * Connect your wallet (MetaMask) to sign and broadcast the review decision.
-                </p>
-              )}
+              {/* Wallet connection */}
+              <button 
+                onClick={connectWallet}
+                className={`flex items-center gap-2 px-4 py-2 font-display font-extrabold text-xs uppercase tracking-wider rounded-md border transition-all duration-150
+                  ${account 
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-500/20" 
+                    : "bg-[#E84142] hover:bg-[#d63435] text-white border-transparent shadow-sm hover:shadow"}`}
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                {account ? "Developer Active" : "Connect Wallet"}
+              </button>
             </div>
-          ) : (
-            <div className="glass-card text-center py-12 text-slate-400 text-sm border border-dashed border-sky-950/60">
-              No validation alerts in queue. System is fully healthy.
-            </div>
-          )}
-        </div>
+          </header>
 
-        {/* Reputation reviews feed */}
-        <div className="flex flex-col gap-4">
-          <h2 className="text-xl font-bold text-slate-200">Live Agent Feedback Logs</h2>
-          <div className="glass-card flex flex-col gap-4 max-h-[360px] overflow-y-auto pr-2">
-            {reviews.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm">No reviews submitted on-chain yet.</div>
-            ) : (
-              reviews.map((rev, idx) => (
-                <div key={idx} className="p-4 rounded-xl bg-slate-950/40 border border-white/5 flex flex-col gap-2">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-200">{rev.agentName}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">from {rev.client.slice(0, 6)}...</span>
-                    </div>
+          {/* Page Body */}
+          <div className="flex-1 p-6 md:p-10 max-w-6xl w-full mx-auto space-y-10">
 
-                    <div className="flex gap-0.5 text-amber-400">
-                      {[...Array(5)].map((_, i) => (
-                        <Star 
-                          key={i} 
-                          className={`w-3 h-3 ${i < rev.rating ? "fill-amber-400" : "text-slate-600"}`} 
-                        />
-                      ))}
-                    </div>
+            {errorMessage && (
+              <div className="border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20 text-red-900 dark:text-red-300 p-4 rounded-xl font-bold text-xs flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <div>{errorMessage}</div>
+              </div>
+            )}
+
+            {/* Tab: Overview Dashboard */}
+            {activeTab === "overview" && (
+              <>
+                {/* Hero / Welcome Onboarding Card */}
+                <section className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-7 relative overflow-hidden shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  {/* Decorative left brand line */}
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#E84142]" />
+                  
+                  <div className="space-y-2 pl-2">
+                    <h2 className="text-2xl font-display font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                      TrustMesh Autonomous Orchestration
+                    </h2>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl font-medium leading-relaxed">
+                      Securing micro-payment and task execution routes on the {isFuji ? "Avalanche Fuji Testnet" : "Local Hardhat Network"}. Using an automated multi-tier architecture, agents are locked into escrows or direct settled depending on real-time reputation scores.
+                    </p>
                   </div>
 
-                  <p className="text-xs text-slate-300">"{rev.comment || "No comment provided."}"</p>
-                  
-                  {rev.tag && (
-                    <div className="flex gap-1.5 flex-wrap mt-1">
-                      {rev.tag.split(",").map((t: string, i: number) => (
-                        <span key={i} className="text-[9px] bg-sky-500/10 text-sky-300 border border-sky-500/20 px-2 py-0.5 rounded">
-                          {t}
-                        </span>
-                      ))}
+                  <div className="flex gap-6 shrink-0 border-l border-zinc-200 dark:border-zinc-800 pl-6 hidden md:flex">
+                    <div className="text-center">
+                      <div className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">3</div>
+                      <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">Agents</div>
                     </div>
-                  )}
+                    <div className="text-center">
+                      <div className="text-xl font-extrabold text-[#E84142]">{networkName}</div>
+                      <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">Chain</div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Service Providers Grid */}
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-display font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                      Available Service Registries
+                    </h3>
+                    {searchQuery && (
+                      <span className="text-xs text-zinc-400 italic">
+                        Showing {filteredProviders.length} of {providers.length} matching agents
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {filteredProviders.length === 0 ? (
+                      <div className="col-span-3 text-center py-16 text-zinc-500 font-medium border border-dashed border-zinc-200 dark:border-zinc-800/80 rounded-2xl bg-white dark:bg-[#131316]">
+                        {providers.length === 0 ? "Loading registry credential state..." : "No agents found matching search query."}
+                      </div>
+                    ) : (
+                      filteredProviders.map((agent) => {
+                        const score = agent.score;
+                        let statusText = "CRITICAL / AUDIT REQUIRED";
+                        let badgeStyle = "bg-red-500/10 text-red-500 border border-red-500/20";
+                        let iconColor = "text-red-500";
+                        let iconBg = "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20";
+                        let agentIcon = <AlertTriangle className="w-5 h-5" />;
+                        let description = "Anomalous execution sandbox agent subject to manual policy review.";
+                        
+                        if (agent.id === 1) {
+                          agentIcon = <Radio className="w-5 h-5" />;
+                          description = "High-frequency weather and financial oracle feed with optimized direct routing.";
+                        } else if (agent.id === 2) {
+                          agentIcon = <Cpu className="w-5 h-5" />;
+                          description = "Custom translation and analytics models with escrow payment security.";
+                        }
+
+                        if (score >= 70) {
+                          statusText = "HIGH TRUST";
+                          badgeStyle = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+                          iconColor = "text-emerald-500";
+                          iconBg = "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20";
+                        } else if (score >= 40) {
+                          statusText = "MEDIUM TRUST";
+                          badgeStyle = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
+                          iconColor = "text-amber-500";
+                          iconBg = "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20";
+                        }
+
+                        return (
+                          <article 
+                            key={agent.id} 
+                            className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-6 flex flex-col justify-between gap-5 relative hover:border-[#E84142] dark:hover:border-[#E84142] transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-1 group"
+                          >
+                            {/* Card Header Info */}
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-center">
+                                {/* Small square icon container */}
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all ${iconBg} ${iconColor}`}>
+                                  {agentIcon}
+                                </div>
+                                {/* Trust Score styling like mock-up */}
+                                <div className="text-right flex items-baseline gap-0.5">
+                                  <span className="text-3xl font-display font-black text-zinc-900 dark:text-zinc-50">{score}</span>
+                                  <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">/100</span>
+                                </div>
+                              </div>
+
+                              <div>
+                                <h4 className="text-lg font-display font-bold uppercase tracking-tight text-zinc-900 dark:text-zinc-50 leading-none">
+                                  {agent.name}
+                                </h4>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                                  {description}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2 mt-3">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${badgeStyle}`}>
+                                    {statusText}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-150 dark:border-zinc-800/50 px-2 py-0.5 rounded font-mono">
+                                    Tier {agent.tier}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Service Trigger Actions */}
+                            <div className="space-y-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-900/60">
+                              <input
+                                type="text"
+                                placeholder="Enter task prompt..."
+                                value={prompts[agent.id] || ""}
+                                onChange={(e) => setPrompts({ ...prompts, [agent.id]: e.target.value })}
+                                disabled={executingAgentId !== null}
+                                className="w-full text-xs px-3 py-2 bg-zinc-50/50 dark:bg-zinc-950/30 border border-zinc-200 dark:border-zinc-800/80 rounded-lg focus:outline-none focus:border-[#E84142] focus:ring-1 focus:ring-[#E84142] text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 font-semibold transition"
+                              />
+                              <button
+                                onClick={() => handleRequestService(agent.id)}
+                                disabled={executingAgentId !== null || !account}
+                                className="w-full bg-[#E84142] hover:bg-[#d63435] text-white font-extrabold py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {executingAgentId === agent.id ? "Routing Ledger..." : "Request Service"}
+                              </button>
+                            </div>
+
+                            {/* CLI Terminal Output Container */}
+                            {executionResult[agent.id] && (
+                              <div className="bg-zinc-950 dark:bg-black rounded-xl border border-zinc-800/80 p-3.5 font-mono text-xs text-zinc-200 flex flex-col gap-2 relative overflow-hidden mt-2">
+                                <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 uppercase border-b border-zinc-800 pb-1.5 mb-1">
+                                  <span className="flex items-center gap-1.5">
+                                    <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+                                    Terminal Output
+                                  </span>
+                                  <button 
+                                    onClick={() => handleCopyText(executionResult[agent.id].output || executionResult[agent.id].status, agent.id)}
+                                    className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition"
+                                  >
+                                    {copiedAgentId === agent.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                                <div className="text-[11px] space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                                  <div>
+                                    <span className="text-[#E84142]">$</span> status --check
+                                  </div>
+                                  <div className="text-zinc-400 font-bold uppercase tracking-tight text-[10px]">
+                                    {executionResult[agent.id].status}
+                                  </div>
+                                  {executionResult[agent.id].output && (
+                                    <div className="bg-zinc-900/60 p-2 rounded border border-zinc-800/60 font-sans leading-relaxed text-zinc-300">
+                                      {executionResult[agent.id].output}
+                                    </div>
+                                  )}
+                                  {executionResult[agent.id].message && (
+                                    <div className="text-red-400 bg-red-950/20 p-2 rounded border border-red-900/30 leading-relaxed font-sans font-medium text-[11px]">
+                                      {executionResult[agent.id].message}
+                                    </div>
+                                  )}
+                                  {executionResult[agent.id].error && (
+                                    <div className="text-red-400 font-sans font-medium">{executionResult[agent.id].error}</div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })
+                    )}
+                  </div>
+                </section>
+
+                {/* Live Activity Feed */}
+                <section className="space-y-4">
+                  <h3 className="text-xs font-display font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    Live Event Logs
+                  </h3>
+                  <div className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm">
+                    {events.length === 0 ? (
+                      <div className="text-center py-10 text-zinc-400 text-sm">
+                        Waiting for routing events... Trigger an agent prompt to initialize logs.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                        {events.map((rev) => (
+                          <div key={rev.id} className="py-3 flex justify-between items-center first:pt-0 last:pb-0">
+                            <div className="flex items-center gap-3">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${rev.type === "escalated" ? "bg-[#E84142] animate-pulse" : rev.type === "resolved" ? "bg-emerald-500" : "bg-zinc-400 dark:bg-zinc-600"}`} />
+                              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{rev.message}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase">
+                              {new Date(rev.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* Tab: Testnet Faucet */}
+            {activeTab === "faucet" && (
+              <section className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-8 space-y-6 shadow-sm">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-display font-bold text-zinc-900 dark:text-zinc-50">{isFuji ? "Avalanche Fuji Testnet" : "Local Testnet"} Faucet</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Acquire testnet AVAX to execute smart contract transactions.
+                  </p>
                 </div>
-              ))
+                <div className="p-4 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#0E0E10] rounded-xl text-xs space-y-3 font-semibold text-zinc-750 dark:text-zinc-300">
+                  <p>In order to fund your developer wallet address directly, visit the official faucet console:</p>
+                  <a 
+                    href="https://faucet.avax.network/" 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="inline-flex items-center gap-1.5 text-[#E84142] hover:underline"
+                  >
+                    Go to Official Avalanche Faucet
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </section>
+            )}
+
+            {/* Tab: Policy Engine */}
+            {activeTab === "policy" && (
+              <section className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-8 space-y-6 shadow-sm">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-display font-bold text-zinc-900 dark:text-zinc-50">PolicyEngine Settings</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Configure automated payment thresholds, sybil flags, and escalation procedures.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                  <div className="border border-zinc-200 dark:border-zinc-800/80 p-5 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold uppercase text-zinc-400">Reputation Tiers</h4>
+                    <ul className="text-xs space-y-2 text-zinc-600 dark:text-zinc-400 font-semibold leading-relaxed">
+                      <li>• <span className="text-emerald-500 font-bold">Tier 0 (Score &ge; 70)</span>: Instant direct settlement.</li>
+                      <li>• <span className="text-amber-500 font-bold">Tier 1 (Score 40-69)</span>: Funds secured in EscrowVault pending validation.</li>
+                      <li>• <span className="text-red-500 font-bold">Tier 2 (Score &lt; 40)</span>: Mandatory manual approval required.</li>
+                    </ul>
+                  </div>
+                  <div className="border border-zinc-200 dark:border-zinc-800/80 p-5 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold uppercase text-zinc-400">Escalation Triggers</h4>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 font-semibold leading-relaxed">
+                      If an agent's on-chain Trust Score drops below the critical threshold (40%) or has `sybilFlagged` active, the PolicyEngine redirects calls into the ValidationRegistry for human validator consensus.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Tab: Escrow Vault */}
+            {activeTab === "escrow" && (
+              <section className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-8 space-y-6 shadow-sm">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-display font-bold text-zinc-900 dark:text-zinc-50">EscrowVault Router</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Provides commit-lock-reveal micro-payment isolation.
+                  </p>
+                </div>
+                <div className="p-4 bg-zinc-50 dark:bg-[#0E0E10] border border-zinc-200 dark:border-zinc-800/80 rounded-xl font-mono text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                  <div className="font-bold text-zinc-900 dark:text-zinc-200 mb-1">Contract Deployment:</div>
+                  <div>Address: {deployed?.contracts?.EscrowVault ? `Configured on ${networkName}` : "Unconfigured"}</div>
+                  <div className="mt-2 text-zinc-500">Creates isolated locks keyed by expected result hashes. Reverts on timeout or verification failures.</div>
+                </div>
+              </section>
+            )}
+
+            {/* Tab: Validation Registry */}
+            {activeTab === "validation" && (
+              <section className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-8 space-y-6 shadow-sm">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-display font-bold text-zinc-900 dark:text-zinc-50">ValidationRegistry</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    A registry mapping consensus validation tasks to decentralized solvers.
+                  </p>
+                </div>
+                <div className="p-4 bg-zinc-50 dark:bg-[#0E0E10] border border-zinc-200 dark:border-zinc-800/80 rounded-xl font-mono text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                  <div className="font-bold text-zinc-900 dark:text-zinc-200 mb-1">Status Summary:</div>
+                  <div>Address: {deployed?.contracts?.ValidationRegistry ? `Configured on ${networkName}` : "Unconfigured"}</div>
+                  <div className="mt-2 text-zinc-500">Acts as the audit trail for policy compliance. Feeds reputation algorithms back to the TrustRegistry.</div>
+                </div>
+              </section>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Escalation Review Modal (Tier 2 Sandbox Fallback) */}
+      {activeEscalation && !activeEscalation.isComplete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#131316] border-l-4 border-l-[#E84142] border-y border-r border-zinc-200 dark:border-zinc-800 p-8 max-w-md w-full flex flex-col gap-6 relative shadow-2xl rounded-r-2xl animate-fade-in text-zinc-900 dark:text-zinc-50">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-red-500/10 text-[#E84142] border border-red-500/20 rounded shrink-0">
+                <AlertTriangle className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-display font-bold uppercase tracking-tight">
+                  Review Required: {activeEscalation.agentName}
+                </h3>
+                <p className="text-xs font-bold text-[#E84142] uppercase mt-1">
+                  Suspicious transaction pattern flagged
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold">
+              The policy engine routed this interaction to Tier 2 because the agent's trust score dropped below 40% (current score: <span className="text-[#E84142] font-black">{activeEscalation.score}%</span>). Manual reviewer approval is required to proceed.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => resolveValidation(true)}
+                disabled={submitting || !account}
+                className="bg-zinc-900 hover:bg-zinc-950 dark:bg-zinc-50 dark:hover:bg-white text-white dark:text-zinc-950 font-extrabold py-3.5 text-xs tracking-wider uppercase rounded transition"
+              >
+                Approve Agent
+              </button>
+
+              <button 
+                onClick={() => resolveValidation(false)}
+                disabled={submitting || !account}
+                className="bg-[#E84142] hover:bg-[#d63435] text-white font-extrabold py-3.5 text-xs tracking-wider uppercase rounded transition"
+              >
+                Reject Agent
+              </button>
+            </div>
+
+            {!account && (
+              <p className="text-[10px] text-center text-[#E84142] font-bold uppercase tracking-wider">
+                * Wallet connection required to authorize decision
+              </p>
             )}
           </div>
         </div>
-      </section>
+      )}
     </div>
   );
 }
