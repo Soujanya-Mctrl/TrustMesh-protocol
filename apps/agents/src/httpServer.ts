@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createPublicClient, http as viemHttp, keccak256, toBytes } from "viem";
 import { avalancheFuji, hardhat } from "viem/chains";
-import { providerProfiles } from "./profiles.js";
+import { providerProfiles, listProviderProfiles } from "./profiles.js";
+import type { AgentProfile } from "./profiles.js";
 import { generateAIContent } from "./server.js";
 
 const rpcUrl = process.env.RPC_URL || process.env.FUJI_RPC_URL || "http://127.0.0.1:8545";
@@ -16,13 +17,7 @@ const publicClient = createPublicClient({
 });
 
 // Start an HTTP server for a specific agent provider profile
-function startServer(port: number, agentKey: string) {
-  const profile = providerProfiles[agentKey];
-  if (!profile) {
-    console.error(`Profile not found for agent key: ${agentKey}`);
-    return;
-  }
-
+function startServer(profile: AgentProfile) {
   const quoteCache = new Map<string, { output: string; deliverableHash: string }>();
 
   const server = http.createServer(async (req, res) => {
@@ -58,14 +53,14 @@ function startServer(port: number, agentKey: string) {
 
           // 1. Quote endpoint (returns deliverable hash for committed escrow)
           if (type === "quote") {
-            const systemInstruction = 
-              agentKey === "dataFeedPro" 
-                ? "You are DataFeed Pro, a premium DeFi and market analysis oracle."
-                : agentKey === "newService"
-                ? "You are NewService, a professional translation and localization assistant."
-                : "You are SuspiciousAgent, a high-frequency trading bot and arbitrage scanner.";
-
-            const output = await generateAIContent(profile.name, prompt || "", systemInstruction);
+            const output = await generateAIContent(
+              profile.name,
+              prompt || "",
+              profile.systemInstruction,
+              undefined,
+              undefined,
+              profile.llmConfig
+            );
             const deliverableHash = keccak256(toBytes(output));
             
             quoteCache.set(prompt || "", { output, deliverableHash });
@@ -166,14 +161,14 @@ function startServer(port: number, agentKey: string) {
             // Generate AI output or retrieve from cache
             let cached = quoteCache.get(prompt || "");
             if (!cached) {
-              const systemInstruction = 
-                agentKey === "dataFeedPro" 
-                  ? "You are DataFeed Pro, a premium DeFi and market analysis oracle."
-                  : agentKey === "newService"
-                  ? "You are NewService, a professional translation and localization assistant."
-                  : "You are SuspiciousAgent, a high-frequency trading bot and arbitrage scanner.";
-
-              const output = await generateAIContent(profile.name, prompt || "", systemInstruction);
+              const output = await generateAIContent(
+                profile.name,
+                prompt || "",
+                profile.systemInstruction,
+                undefined,
+                undefined,
+                profile.llmConfig
+              );
               const deliverableHash = keccak256(toBytes(output));
               cached = { output, deliverableHash };
             } else {
@@ -202,8 +197,8 @@ function startServer(port: number, agentKey: string) {
     }
   });
 
-  server.listen(port, () => {
-    console.log(`📡 [${profile.name}] x402 Server listening on http://localhost:${port}/request-service`);
+  server.listen(profile.port, () => {
+    console.log(`📡 [${profile.name}] x402 Server listening on http://localhost:${profile.port}/request-service`);
   });
 
   return server;
@@ -211,7 +206,8 @@ function startServer(port: number, agentKey: string) {
 
 export function startAgentServers() {
   console.log("=== Starting x402 Agent Provider HTTP Servers ===\n");
-  startServer(3001, "dataFeedPro");
-  startServer(3002, "newService");
-  startServer(3003, "suspiciousAgent");
+  const profiles = listProviderProfiles();
+  for (const profile of profiles) {
+    startServer(profile);
+  }
 }

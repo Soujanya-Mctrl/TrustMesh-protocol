@@ -1,6 +1,7 @@
 import hre from "hardhat";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseEther } from "viem";
 
 async function main() {
   console.log("=== TrustMesh ERC-8004 & Policy Engine Unified Deployment ===\n");
@@ -8,11 +9,44 @@ async function main() {
   const net = await hre.network.getOrCreate();
   const { viem } = net;
   const walletClients = await viem.getWalletClients();
+  const publicClient = await viem.getPublicClient();
 
   const deployer = walletClients[0];
   const dataFeedProWallet = walletClients[1];
   const newServiceWallet = walletClients[2];
   const suspiciousAgentWallet = walletClients[3];
+  const priceOracleWallet = walletClients[4];
+  const summaryBotWallet = walletClients[5];
+  const riskAssessorWallet = walletClients[6];
+  const codeAuditorWallet = walletClients[7];
+  const onChainIndexerWallet = walletClients[8];
+
+  // Auto-fund agent wallets from deployer if balance is below 0.1 AVAX
+  const agents = [
+    { name: "DataFeed Pro", wallet: dataFeedProWallet },
+    { name: "NewService", wallet: newServiceWallet },
+    { name: "SuspiciousAgent", wallet: suspiciousAgentWallet },
+    { name: "PriceOracle", wallet: priceOracleWallet },
+    { name: "SummaryBot", wallet: summaryBotWallet },
+    { name: "RiskAssessor", wallet: riskAssessorWallet },
+    { name: "CodeAuditor", wallet: codeAuditorWallet },
+    { name: "OnChainIndexer", wallet: onChainIndexerWallet },
+  ];
+
+  console.log("Checking gas balances for agent wallets...");
+  for (const agent of agents) {
+    const bal = await publicClient.getBalance({ address: agent.wallet.account.address });
+    if (bal < parseEther("0.1")) {
+      console.log(`  Funding ${agent.name} (${agent.wallet.account.address}) with 0.15 AVAX...`);
+      const tx = await deployer.sendTransaction({
+        to: agent.wallet.account.address,
+        value: parseEther("0.15"),
+      });
+      await publicClient.waitForTransactionReceipt({ hash: tx });
+    }
+  }
+  console.log("✓ Gas balances checked and funded.");
+
 
   // 1. Deploy IdentityRegistry (Standard ERC-8004)
   console.log("1. Deploying IdentityRegistry...");
@@ -99,6 +133,46 @@ async function main() {
   );
   console.log(`    ✓ TaskAgent (SuspiciousAgent): ${taskAgentSuspiciousAgent.address}`);
 
+  console.log("11. Deploying TaskAgent for PriceOracle...");
+  const taskAgentPriceOracle = await viem.deployContract(
+    "TaskAgent",
+    [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
+    { client: { wallet: priceOracleWallet } }
+  );
+  console.log(`    ✓ TaskAgent (PriceOracle): ${taskAgentPriceOracle.address}`);
+
+  console.log("12. Deploying TaskAgent for SummaryBot...");
+  const taskAgentSummaryBot = await viem.deployContract(
+    "TaskAgent",
+    [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
+    { client: { wallet: summaryBotWallet } }
+  );
+  console.log(`    ✓ TaskAgent (SummaryBot): ${taskAgentSummaryBot.address}`);
+
+  console.log("13. Deploying TaskAgent for RiskAssessor...");
+  const taskAgentRiskAssessor = await viem.deployContract(
+    "TaskAgent",
+    [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
+    { client: { wallet: riskAssessorWallet } }
+  );
+  console.log(`    ✓ TaskAgent (RiskAssessor): ${taskAgentRiskAssessor.address}`);
+
+  console.log("14. Deploying TaskAgent for CodeAuditor...");
+  const taskAgentCodeAuditor = await viem.deployContract(
+    "TaskAgent",
+    [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
+    { client: { wallet: codeAuditorWallet } }
+  );
+  console.log(`    ✓ TaskAgent (CodeAuditor): ${taskAgentCodeAuditor.address}`);
+
+  console.log("15. Deploying TaskAgent for OnChainIndexer...");
+  const taskAgentOnChainIndexer = await viem.deployContract(
+    "TaskAgent",
+    [identityRegistry.address, reputationRegistry.address, validationRegistry.address],
+    { client: { wallet: onChainIndexerWallet } }
+  );
+  console.log(`    ✓ TaskAgent (OnChainIndexer): ${taskAgentOnChainIndexer.address}`);
+
   // ===== Post-deployment wiring =====
   console.log("\n=== Wiring permissions ===\n");
 
@@ -110,9 +184,7 @@ async function main() {
   await metricsRegistry.write.authorizeSettler([policyEngine.address, true]);
   console.log("    ✓ PolicyEngine authorized as settler on AgentMetricsRegistry");
 
-  // Authorize PolicyEngine as writer on ValidationRegistry (to resolve validations via humanApprove)
-  await validationRegistry.write.setAuthorizedWriter([policyEngine.address, true]);
-  console.log("    ✓ PolicyEngine authorized as writer on ValidationRegistry");
+
 
   // Authorize deployer as facilitator on PolicyEngine (for direct settlement recording)
   await policyEngine.write.addFacilitator([deployer.account.address]);
@@ -136,6 +208,11 @@ async function main() {
       TaskAgent_DataFeedPro: taskAgentDataFeedPro.address,
       TaskAgent_NewService: taskAgentNewService.address,
       TaskAgent_SuspiciousAgent: taskAgentSuspiciousAgent.address,
+      TaskAgent_PriceOracle: taskAgentPriceOracle.address,
+      TaskAgent_SummaryBot: taskAgentSummaryBot.address,
+      TaskAgent_RiskAssessor: taskAgentRiskAssessor.address,
+      TaskAgent_CodeAuditor: taskAgentCodeAuditor.address,
+      TaskAgent_OnChainIndexer: taskAgentOnChainIndexer.address,
     },
   };
 

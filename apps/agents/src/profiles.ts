@@ -1,60 +1,54 @@
 import type { ProviderProfile } from "@trustmesh/shared";
-import { createPublicClient, http, parseAbi } from "viem";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { privateKeyToAccount } from "viem/accounts";
+import { profile as dataFeedPro } from "./dataFeedPro.js";
+import { profile as newService } from "./newService.js";
+import { profile as suspiciousAgent } from "./suspiciousAgent.js";
+import { profile as priceOracle } from "./priceOracle.js";
+import { profile as summaryBot } from "./summaryBot.js";
+import { profile as riskAssessor } from "./riskAssessor.js";
+import { profile as codeAuditor } from "./codeAuditor.js";
+import { profile as onChainIndexer } from "./onChainIndexer.js";
 
-// Read deployed addresses
-let deployed: any;
-try {
-  const path = resolve(process.cwd(), "deployed-addresses.json");
-  deployed = JSON.parse(readFileSync(path, "utf8"));
-} catch {
-  try {
-    const path = resolve(process.cwd(), "../../deployed-addresses.json");
-    deployed = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    // fallback if file not created yet
+export interface AgentProfile extends ProviderProfile {
+  agentId: number;
+  key: string;
+  port: number;
+  capabilities: string[];
+  contractName: string;
+  privateKey: `0x${string}`;
+  contractAddress: `0x${string}`;
+  systemInstruction: string;
+  llmConfig?: {
+    provider: "gemini" | "groq";
+    model?: string;
+  };
+  execute: (taskId: bigint) => Promise<string>;
+}
+
+export const providerProfiles: Record<string, AgentProfile> = {
+  dataFeedPro,
+  newService,
+  suspiciousAgent,
+  priceOracle,
+  summaryBot,
+  riskAssessor,
+  codeAuditor,
+  onChainIndexer,
+};
+
+// Dynamically derive walletAddress from privateKey for all 8 profiles to support custom Fuji keys
+for (const key of Object.keys(providerProfiles)) {
+  const profile = providerProfiles[key];
+  if (profile.privateKey) {
+    try {
+      const account = privateKeyToAccount(profile.privateKey);
+      profile.walletAddress = account.address;
+    } catch (err) {
+      console.error(`Failed to derive address for agent ${profile.name}:`, err);
+    }
   }
 }
 
-// Demo agent wallets — these are deterministic Hardhat test accounts
-const HARDHAT_ACCOUNTS = {
-  account1: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as `0x${string}`,
-  account2: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" as `0x${string}`,
-  account3: "0x90F79bf6EB2c4f870365E785982E1f101E93b906" as `0x${string}`,
-};
-
-export const providerProfiles: Record<string, ProviderProfile> = {
-  dataFeedPro: {
-    name: "DataFeed Pro",
-    trustScore: 92,
-    tier: 0,
-    serviceUrl: "http://localhost:3001/request-service",
-    correctDeliverable: true,
-    walletAddress: HARDHAT_ACCOUNTS.account1,
-    serviceFee: "1000000000000000", // 0.001 AVAX
-  },
-  newService: {
-    name: "NewService",
-    trustScore: 55,
-    tier: 1,
-    serviceUrl: "http://localhost:3002/request-service",
-    correctDeliverable: true,
-    walletAddress: HARDHAT_ACCOUNTS.account2,
-    serviceFee: "2000000000000000", // 0.002 AVAX
-  },
-  suspiciousAgent: {
-    name: "SuspiciousAgent",
-    trustScore: 22,
-    tier: 2,
-    serviceUrl: "http://localhost:3003/request-service",
-    correctDeliverable: false,
-    walletAddress: HARDHAT_ACCOUNTS.account3,
-    serviceFee: "500000000000000", // 0.0005 AVAX
-  },
-};
-
-
-export function listProviderProfiles(): ProviderProfile[] {
+export function listProviderProfiles(): AgentProfile[] {
   return Object.values(providerProfiles);
 }

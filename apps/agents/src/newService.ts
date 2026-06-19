@@ -18,10 +18,28 @@ const systemInstruction =
   "maintaining a professional tone, and return the translated content.";
 
 export async function executeNewService(taskId: bigint): Promise<string> {
-  return executeAgentTask({
-    name: "NewService",
-    contractAddress,
-    privateKey,
-    systemInstruction,
-  }, taskId);
+  return executeAgentTask(profile, taskId);
 }
+
+export const profile = {
+  agentId: 2,
+  key: "newService",
+  name: "NewService",
+  port: 3003,
+  capabilities: ["translate_text", "draft_announcement", "write_newsletter", "summarize_text"],
+  contractName: "TaskAgent_NewService",
+  trustScore: 55,
+  tier: 1 as const,
+  serviceUrl: "http://localhost:3003/request-service",
+  correctDeliverable: true,
+  walletAddress: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" as `0x${string}`,
+  serviceFee: "2000000000000000", // 0.002 AVAX
+  contractAddress,
+  privateKey,
+  systemInstruction,
+  llmConfig: {
+    provider: "groq" as const,
+    model: "llama-3.3-70b-versatile",
+  },
+  execute: executeNewService,
+};

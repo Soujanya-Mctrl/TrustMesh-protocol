@@ -1,6 +1,8 @@
 import hre from "hardhat";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { keccak256, toBytes } from "viem";
+
 
 interface DeployedAddresses {
   contracts: {
@@ -14,6 +16,11 @@ interface DeployedAddresses {
     TaskAgent_DataFeedPro: `0x${string}`;
     TaskAgent_NewService: `0x${string}`;
     TaskAgent_SuspiciousAgent: `0x${string}`;
+    TaskAgent_PriceOracle: `0x${string}`;
+    TaskAgent_SummaryBot: `0x${string}`;
+    TaskAgent_RiskAssessor: `0x${string}`;
+    TaskAgent_CodeAuditor: `0x${string}`;
+    TaskAgent_OnChainIndexer: `0x${string}`;
   };
 }
 
@@ -73,7 +80,146 @@ const DEMO_AGENTS = [
       { rating: 4n, tags: "neutral" }
     ]
   },
+  {
+    name: "PriceOracle",
+    targetScore: 88,
+    tier: 0 as const,
+    description: "Low-fee price oracle providing fast asset pricing rates",
+    reputationRating: 5n,
+    registrationDaysAgo: 180,
+    settledUsd: 6000,
+    txCount: 40,
+    microTxCount: 2,
+    counterparties: 35,
+    capabilities: ["price-oracle", "defi-rates", "token-balance", "arbitrage"],
+    reviews: [
+      { rating: 5n, tags: "cheap,accurate" },
+      { rating: 4n, tags: "fast" }
+    ]
+  },
+  {
+    name: "SummaryBot",
+    targetScore: 64,
+    tier: 1 as const,
+    description: "Automated summarization and document formatting assistant",
+    reputationRating: 4n,
+    registrationDaysAgo: 45,
+    settledUsd: 1500,
+    txCount: 15,
+    microTxCount: 1,
+    counterparties: 10,
+    capabilities: ["summarize", "newsletter", "entities", "formatting"],
+    reviews: [
+      { rating: 4n, tags: "good" },
+      { rating: 4n, tags: "readable" }
+    ]
+  },
+  {
+    name: "RiskAssessor",
+    targetScore: 78,
+    tier: 0 as const,
+    description: "On-chain risk analyzer and counterparty scanner",
+    reputationRating: 5n,
+    registrationDaysAgo: 90,
+    settledUsd: 5000,
+    txCount: 30,
+    microTxCount: 3,
+    counterparties: 25,
+    capabilities: ["risk-check", "anomalies", "wallet-history", "scoring"],
+    reviews: [
+      { rating: 5n, tags: "detailed" },
+      { rating: 4n, tags: "thorough" }
+    ]
+  },
+  {
+    name: "CodeAuditor",
+    targetScore: 95,
+    tier: 0 as const,
+    description: "Professional Solidity smart contract security auditor",
+    reputationRating: 5n,
+    registrationDaysAgo: 200,
+    settledUsd: 12000,
+    txCount: 60,
+    microTxCount: 0,
+    counterparties: 45,
+    capabilities: ["audit", "vulnerabilities", "compliance", "report"],
+    reviews: [
+      { rating: 5n, tags: "safe,expert" },
+      { rating: 5n, tags: "professional" }
+    ]
+  },
+  {
+    name: "OnChainIndexer",
+    targetScore: 82,
+    tier: 0 as const,
+    description: "Avalanche subnet state indexer and data compiler",
+    reputationRating: 5n,
+    registrationDaysAgo: 150,
+    settledUsd: 7000,
+    txCount: 45,
+    microTxCount: 2,
+    counterparties: 35,
+    capabilities: ["indexer", "state-read", "analytics", "tx-history"],
+    reviews: [
+      { rating: 4n, tags: "accurate" },
+      { rating: 5n, tags: "complete" }
+    ]
+  },
 ];
+
+function getAgentServiceEndpoint(name: string): string {
+  const nameLower = name.toLowerCase().replace(/\s+/g, "");
+  if (nameLower === "datafeedpro") return "http://localhost:3001/request-service";
+  if (nameLower === "priceoracle") return "http://localhost:3002/request-service";
+  if (nameLower === "newservice") return "http://localhost:3003/request-service";
+  if (nameLower === "suspiciousagent") return "http://localhost:3004/request-service";
+  if (nameLower === "summarybot") return "http://localhost:3006/request-service";
+  if (nameLower === "riskassessor") return "http://localhost:3007/request-service";
+  if (nameLower === "codeauditor") return "http://localhost:3008/request-service";
+  if (nameLower === "onchainindexer") return "http://localhost:3009/request-service";
+  return "http://localhost:3000/request-service";
+}
+
+async function uploadToPinata(metadata: any, agentName: string): Promise<string | null> {
+  const jwt = process.env.PINATA_JWT;
+  if (!jwt) {
+    console.log(`  ⚠ PINATA_JWT not configured. Skipping IPFS upload for ${agentName}.`);
+    return null;
+  }
+
+  try {
+    const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${jwt}`
+      },
+      body: JSON.stringify({
+        pinataContent: metadata,
+        pinataMetadata: {
+          name: `${agentName.replace(/\s+/g, "-").toLowerCase()}-metadata`
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn(`  ⚠ Pinata upload failed for ${agentName}: ${response.status} ${response.statusText} - ${errText}`);
+      return null;
+    }
+
+    const resJson = (await response.json()) as any;
+    if (resJson && resJson.IpfsHash) {
+      console.log(`  ✓ Successfully pinned metadata to IPFS via Pinata: ipfs://${resJson.IpfsHash}`);
+      return `ipfs://${resJson.IpfsHash}`;
+    }
+
+    return null;
+  } catch (error: any) {
+    console.warn(`  ⚠ Pinata upload error for ${agentName}:`, error.message || error);
+    return null;
+  }
+}
 
 async function main() {
   console.log("=== TrustMesh Seeding ===\n");
@@ -99,9 +245,14 @@ async function main() {
 
   // Deterministic agent addresses matching profiles.ts
   const agentAddresses = [
-    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Account #1
-    "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // Account #2
-    "0x90F79bf6EB2c4f870365E785982E1f101E93b906"  // Account #3
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Account #1 (DataFeed Pro)
+    "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // Account #2 (NewService)
+    "0x90F79bf6EB2c4f870365E785982E1f101E93b906", // Account #3 (SuspiciousAgent)
+    "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65", // Account #4 (PriceOracle)
+    "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc", // Account #5 (SummaryBot)
+    "0x976ea74026e726554db657fa54763abd0c3a0aa9", // Account #6 (RiskAssessor)
+    "0x14dc79964da2c08b23698b3d3cc7ca32193d9955", // Account #7 (CodeAuditor)
+    "0x23618e81e3f5cdf7f54c3d65f7fbc0abf5b21e8f", // Account #8 (OnChainIndexer)
   ];
 
   // Reviewers: use local hardhat accounts if available, fallback to deployer
@@ -140,7 +291,12 @@ async function main() {
     let taskAgentAddress: `0x${string}`;
     if (i === 0) taskAgentAddress = deployed.contracts.TaskAgent_DataFeedPro;
     else if (i === 1) taskAgentAddress = deployed.contracts.TaskAgent_NewService;
-    else taskAgentAddress = deployed.contracts.TaskAgent_SuspiciousAgent;
+    else if (i === 2) taskAgentAddress = deployed.contracts.TaskAgent_SuspiciousAgent;
+    else if (i === 3) taskAgentAddress = deployed.contracts.TaskAgent_PriceOracle;
+    else if (i === 4) taskAgentAddress = deployed.contracts.TaskAgent_SummaryBot;
+    else if (i === 5) taskAgentAddress = deployed.contracts.TaskAgent_RiskAssessor;
+    else if (i === 6) taskAgentAddress = deployed.contracts.TaskAgent_CodeAuditor;
+    else taskAgentAddress = deployed.contracts.TaskAgent_OnChainIndexer;
 
     const taskAgent = await viem.getContractAt(
       "TaskAgent",
@@ -151,12 +307,52 @@ async function main() {
     const isRegistered = await taskAgent.read.isRegistered();
     let agentId: bigint;
     if (!isRegistered) {
-      // 1. Register agent via its TaskAgent contract
+      // 1. Resolve chain ID and registry address for standard ERC-8004 registrations
+      const chainId = await publicClient.getChainId();
+      const registryAddress = identityRegistry.address;
+      
+      // 2. Predict the agentId based on total supply + 1
+      const totalSupply = await identityRegistry.read.totalAgents() as bigint;
+      const predictedAgentId = totalSupply + 1n;
+
+      // Prepare ERC-8004 metadata matching EIP-8004 spec exactly
+      const serviceEndpoint = getAgentServiceEndpoint(agent.name);
+      const meta = {
+        type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+        name: agent.name,
+        description: agent.description,
+        image: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(agent.name)}`,
+        services: [
+          {
+            name: "web",
+            endpoint: serviceEndpoint
+          }
+        ],
+        capabilities: agent.capabilities, // Included as custom profile extension (allowed by spec)
+        x402Support: true,
+        active: true,
+        registrations: [
+          {
+            agentId: Number(predictedAgentId),
+            agentRegistry: `eip155:${chainId}:${registryAddress}`
+          }
+        ],
+        supportedTrust: ["reputation", "crypto-economic"]
+      };
+
+      let agentURI = await uploadToPinata(meta, agent.name);
+      if (!agentURI) {
+        // Fallback to inline base64 data URI
+        const base64Meta = Buffer.from(JSON.stringify(meta)).toString("base64");
+        agentURI = `data:application/json;base64,${base64Meta}`;
+        console.log(`  ✓ Generated inline base64 data URI for ${agent.name}`);
+      }
+
+      // 1. Register agent via its TaskAgent contract (3 arguments)
       const tx = await taskAgent.write.registerAgent([
-        agentAddress,
         agent.name,
         agent.description,
-        `ipfs://${agent.name.replace(/\s+/g, "").toLowerCase()}Metadata`
+        agentURI
       ]);
       await waitTx(tx);
       agentId = (await taskAgent.read.agentId()) as bigint;
@@ -195,12 +391,51 @@ async function main() {
 
     // 2. Submit real reputation reviews from multiple counterparties (against Agent ID!)
     for (let r = 0; r < agent.reviews.length; r++) {
-      const reviewerWallet = reviewers[r % reviewers.length];
+      let reviewerWallet = reviewers[r % reviewers.length];
+      if (reviewerWallet.account.address.toLowerCase() === agentAddress.toLowerCase()) {
+        reviewerWallet = reviewers[(r + 1) % reviewers.length];
+        if (reviewerWallet.account.address.toLowerCase() === agentAddress.toLowerCase()) {
+          reviewerWallet = deployer;
+        }
+      }
       const reputationAsReviewer = await viem.getContractAt(
         "ReputationRegistry",
         deployed.contracts.ReputationRegistry,
         { client: { wallet: reviewerWallet } }
       );
+      // 1. Resolve chain ID and registry address for feedback metadata
+      const chainId = await publicClient.getChainId();
+      const registryAddress = identityRegistry.address;
+
+      const feedbackMeta = {
+        agentRegistry: `eip155:${chainId}:${registryAddress}`,
+        agentId: Number(agentId),
+        clientAddress: `eip155:${chainId}:${reviewerWallet.account.address}`,
+        createdAt: new Date(now * 1000).toISOString(),
+        value: Number(agent.reviews[r].rating),
+        valueDecimals: 0,
+        tag1: agent.reviews[r].tags,
+        tag2: "",
+        proofOfPayment: {
+          fromAddress: reviewerWallet.account.address,
+          toAddress: agentAddress,
+          chainId: chainId.toString(),
+          txHash: "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      };
+
+      let feedbackURI = await uploadToPinata(feedbackMeta, `${agent.name}-feedback-${r}`);
+      let feedbackHash = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+      if (feedbackURI) {
+        feedbackHash = keccak256(toBytes(JSON.stringify(feedbackMeta)));
+      } else {
+        // Fallback to inline base64 data URI
+        const base64Meta = Buffer.from(JSON.stringify(feedbackMeta)).toString("base64");
+        feedbackURI = `data:application/json;base64,${base64Meta}`;
+        feedbackHash = keccak256(toBytes(JSON.stringify(feedbackMeta)));
+        console.log(`  ✓ Generated inline base64 feedback data URI for review #${r}`);
+      }
+
       const fbTx = await reputationAsReviewer.write.giveFeedback([
         agentId,
         agent.reviews[r].rating,
@@ -208,8 +443,8 @@ async function main() {
         agent.reviews[r].tags, // tag1
         "", // tag2
         "", // endpoint
-        "", // feedbackURI
-        "0x0000000000000000000000000000000000000000000000000000000000000000" // feedbackHash
+        feedbackURI,
+        feedbackHash
       ]);
       await waitTx(fbTx);
     }

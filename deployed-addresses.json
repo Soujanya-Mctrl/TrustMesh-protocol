@@ -1,19 +1,24 @@
 {
   "network": "fuji",
-  "deployedAt": "2026-06-16T13:13:40.823Z",
+  "deployedAt": "2026-06-19T19:35:41.317Z",
   "contracts": {
-    "AgentIdentityRegistry": "0xec7148212bbed46b18f16e2904861f128fae5f6c",
-    "ReputationRegistry": "0xeecaf43f7ea989c664b16d5794850a8a33ff0981",
-    "ValidationRegistry": "0x547783b2c631b9eb74ad0a4670743e624972e52e",
-    "IdentityRegistry8004": "0xec7148212bbed46b18f16e2904861f128fae5f6c",
-    "ReputationRegistry8004": "0xeecaf43f7ea989c664b16d5794850a8a33ff0981",
-    "ValidationRegistry8004": "0x547783b2c631b9eb74ad0a4670743e624972e52e",
-    "AgentMetricsRegistry": "0x460f9608f511b4b9d69b35ab093f179bda0733c6",
-    "TrustRegistry": "0x69ef5bfa9f20bdfebced251266eae52235892a82",
-    "EscrowVault": "0xeb09130672d5b966057da2870297e30594ac4c9c",
-    "PolicyEngine": "0x6bab284758b78513233234e8217739f391b49069",
-    "TaskAgent_DataFeedPro": "0xa262cf7d77c01942103fa85cc9ac5215eaea9cb8",
-    "TaskAgent_NewService": "0xa902e645b530e5d92996e73f148c1ecdcf1b8b87",
-    "TaskAgent_SuspiciousAgent": "0xe6ec08944ff778be09578881a4e2cb207f1db6d7"
+    "AgentIdentityRegistry": "0x5405a1d53806ae8a4d463e5f5c5947bdb0b1a0ad",
+    "ReputationRegistry": "0xb3bf3b2f06095880b6c3653d322ae3159779411e",
+    "ValidationRegistry": "0xe7d26f7e543ee869fe6d2854efb04fd9ca857bd6",
+    "IdentityRegistry8004": "0x5405a1d53806ae8a4d463e5f5c5947bdb0b1a0ad",
+    "ReputationRegistry8004": "0xb3bf3b2f06095880b6c3653d322ae3159779411e",
+    "ValidationRegistry8004": "0xe7d26f7e543ee869fe6d2854efb04fd9ca857bd6",
+    "AgentMetricsRegistry": "0x84e6fad2a81b8a4149962f949f3684cc8c0e3b3d",
+    "TrustRegistry": "0xdd04604de6432c333ea02a44be744c93b99314f8",
+    "EscrowVault": "0x1a21669ea77680f60d05ea6f31418461a8a38763",
+    "PolicyEngine": "0x2c1c5df6a34057957e3eac776693d1703f88b84c",
+    "TaskAgent_DataFeedPro": "0x7a4a84ce836232cc9033a5997db60ed16f03f497",
+    "TaskAgent_NewService": "0xa569bbafe5f9177db0e07071761d54691a5fdf81",
+    "TaskAgent_SuspiciousAgent": "0xbdf66e0a87a5759444ec0b585bdf581ce3ef309e",
+    "TaskAgent_PriceOracle": "0x5b61d17a691aa6c03573c09197ca498797056aef",
+    "TaskAgent_SummaryBot": "0xa95f98d28b1a0f697f99a18d22d78a2e976653c6",
+    "TaskAgent_RiskAssessor": "0xacf1571337efbf93b3e3cf037edcc1ef715ec3dc",
+    "TaskAgent_CodeAuditor": "0xfb13b701060955b81e4c63132e09ccaeed94ff9d",
+    "TaskAgent_OnChainIndexer": "0x0f41775109f15c5eec104257e4ee76e0c9dc3285"
   }
 }

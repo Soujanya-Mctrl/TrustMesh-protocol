@@ -1,10 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import {
-  providerProfiles,
-  executeDataFeedPro,
-  executeNewService,
-  executeSuspiciousAgent
-} from "@trustmesh/agents";
+import { providerProfiles } from "@trustmesh/agents";
 import type { TrustMeshClient, ViemRuntime } from "@trustmesh/sdk";
 import { parseAbi, keccak256, toBytes } from "viem";
 import { readFileSync } from "node:fs";
@@ -19,8 +14,9 @@ export interface OrchestratorDependencies {
 }
 
 export interface WorkflowStep {
-  agentKey: "dataFeedPro" | "newService" | "suspiciousAgent";
+  requiredCapability: string;
   prompt: string;
+  trustThreshold: number;
 }
 
 const apiKey = process.env.GEMINI_API_KEY || "";
@@ -50,53 +46,66 @@ const TaskAgentABI = parseAbi([
   "event TaskCompleted(uint256 indexed taskId, string outputURI, bytes32 outputHash)",
 ]);
 
+
+
 function getFallbackPlan(goal: string): WorkflowStep[] {
   const normalized = goal.toLowerCase();
-  if (normalized.includes("meetup")) {
-    return [
-      {
-        agentKey: "dataFeedPro",
-        prompt: "What are the top 3 trending DeFi themes in Avalanche C-Chain for a developer meetup agenda?",
-      },
-      {
-        agentKey: "newService",
-        prompt: "Translate this meetup invite to Japanese: 'Join us for our upcoming Avalanche Developer Meetup on June 18th to discuss: {{output_0}}'",
-      },
-      {
-        agentKey: "suspiciousAgent",
-        prompt: "Analyze the following RSVPs for sybil accounts: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8, 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC, 0x90F79bf6EB2c4f870365E785982E1f101E93b906",
-      },
-    ];
-  }
   if (normalized.includes("yield") || normalized.includes("finance") || normalized.includes("stake")) {
+    // Scenario 1: DeFi Yield Hunt
     return [
       {
-        agentKey: "dataFeedPro",
-        prompt: "Fetch current yield options and APYs for Benqi Liquid Staking (sAVAX) and Trader Joe AVAX/USDC pools.",
+        requiredCapability: "compare_pools",
+        prompt: "Compare yield rates and APYs for Benqi Liquid Staking (sAVAX) and Trader Joe AVAX/USDC pools.",
+        trustThreshold: 40,
       },
       {
-        agentKey: "newService",
-        prompt: "Generate a rebalancing script to allocate 60% of funds to sAVAX and 40% to Trader Joe pools based on these rates: {{output_0}}",
+        requiredCapability: "read_contract_state",
+        prompt: "Verify the contract state and check on-chain metrics for Benqi contract: {{output_0}}",
+        trustThreshold: 40,
       },
       {
-        agentKey: "suspiciousAgent",
-        prompt: "Scan for arbitrage opportunities on the proposed rebalancing routes: {{output_1}}",
+        requiredCapability: "write_newsletter",
+        prompt: "Format a Yield Hunt newsletter summary detailing the rebalancing allocation: {{output_1}}",
+        trustThreshold: 40,
       },
     ];
   }
-  // default/research fallback
+  if (normalized.includes("governance") || normalized.includes("dao") || normalized.includes("proposal") || normalized.includes("voter")) {
+    // Scenario 2: DAO Governance Sprint
+    return [
+      {
+        requiredCapability: "summarize_text",
+        prompt: "Summarize active proposals and comments regarding Parameter yield reduction.",
+        trustThreshold: 40,
+      },
+      {
+        requiredCapability: "scan_wallet_hist",
+        prompt: "Scan voter wallet history to verify Sybil accounts: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8, 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        trustThreshold: 70, // High trust threshold for Sybil checking
+      },
+      {
+        requiredCapability: "draft_announcement",
+        prompt: "Draft a final announcement summarizing the proposals and voter risk assessment: {{output_0}} and {{output_1}}",
+        trustThreshold: 40,
+      },
+    ];
+  }
+  // Scenario 3: Cross-Chain Deployment Audit
   return [
     {
-      agentKey: "dataFeedPro",
-      prompt: "Summarize the active addresses, transactions, and gas fees across primary Avalanche Subnets over the last 24 hours.",
+      requiredCapability: "audit_contract",
+      prompt: "Audit the new YieldOptimizer contract code for potential vulnerability patterns and safety flaws.",
+      trustThreshold: 70, // Smart contract audits require high trust
     },
     {
-      agentKey: "newService",
-      prompt: "Write a professional developer newsletter in markdown summarizing these subnet statistics: {{output_0}}",
+      requiredCapability: "counterparty_risk",
+      prompt: "Assess counterparty risk and security score for the deployment wallet: 0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+      trustThreshold: 70, // Security risk evaluation requires high trust
     },
     {
-      agentKey: "suspiciousAgent",
-      prompt: "Verify the security status and verify links for the following subnet nodes: {{output_1}}",
+      requiredCapability: "generate_report",
+      prompt: "Generate a markdown security report compiling the audit findings and counterparty risks: {{output_0}} and {{output_1}}",
+      trustThreshold: 40,
     },
   ];
 }
@@ -122,42 +131,27 @@ async function planWorkflow(
     const agentDescriptions = agents.map(a => 
       `- Key: ${a.key}
        Name: ${a.profile.name}
-       TaskAgent Contract Address: ${a.contractAddress}
-       ERC-8004 Feedback Reviews: ${a.feedbackCount}
-       ERC-8004 Average Rating: ${a.averageRating}
-       Capabilities: ${a.capabilities}`
+       Capabilities: ${a.capabilities.join(", ")}
+       Service Fee: ${Number(a.profile.serviceFee) / 1e18} AVAX`
     ).join("\n\n");
 
     const prompt = `You are the Lead Orchestrator Agent for TrustMesh.
-You have a high-level user goal, and you must plan a sequence of steps to achieve it by calling the available specialist agents via their on-chain TaskAgent contracts.
+You have a high-level user goal. Decompose this goal into a sequential pipeline of abstract steps.
+For each step, specify:
+1. "requiredCapability": The specific capability needed for this step. Choose from the available agent capability lists.
+2. "prompt": The specific instruction/prompt to send to the chosen agent. If you need to refer to the output of a previous step, use the placeholder format "{{output_0}}" for the first step, "{{output_1}}" for the second step, etc.
+3. "trustThreshold": The minimum trust score (0 to 100) required for this task. For instance, security scans/audits or Sybil-checking tasks require high trust (70), whereas standard translation/summarization tasks can use 40.
 
-Available Specialist Agents:
+Available Specialist Agents & Capabilities:
 ${agentDescriptions}
 
 User Goal: "${goal}"
 
-Decompose this goal into a sequential pipeline of steps.
-For each step, specify:
-1. "agentKey": The key of the agent to call ("dataFeedPro", "newService", or "suspiciousAgent").
-2. "prompt": The specific instruction/prompt to send to that agent. If you need to refer to the output of a previous step, use the placeholder format "{{output_0}}" for the first step, "{{output_1}}" for the second step, etc.
-
-Return ONLY a JSON array of objects with the keys "agentKey" and "prompt". Do not wrap it in markdown formatting other than pure JSON.
-Example response:
-[
-  {
-    "agentKey": "dataFeedPro",
-    "prompt": "Analyze AVAX token on Avalanche."
-  },
-  {
-    "agentKey": "newService",
-    "prompt": "Translate this report: {{output_0}} to Japanese."
-  }
-]`;
+Return ONLY a JSON array of objects with the keys "requiredCapability", "prompt", and "trustThreshold". Do not wrap it in markdown formatting other than pure JSON.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     
-    // Strip markdown code block if present
     let jsonText = text;
     if (jsonText.startsWith("```json")) {
       jsonText = jsonText.substring(7);
@@ -182,17 +176,15 @@ export async function runOrchestrator(
 ): Promise<void> {
   const logger = dependencies.logger ?? console;
 
-  // Resolve final high-level goal
+  // Resolve final high-level goal based on 3 scenarios
   let finalGoal = goal;
   if (!finalGoal) {
-    if (scenario === "meetup") {
-      finalGoal = "Plan a developer meetup in Japan discussing Avalanche trends and RSVPs";
-    } else if (scenario === "finance") {
-      finalGoal = "Optimize DeFi yields by rebalancing sAVAX and Trader Joe pools";
-    } else if (scenario === "research") {
-      finalGoal = "Compile a research newsletter summarizing Avalanche subnet statistics and cross-checking facts";
+    if (scenario === "finance") {
+      finalGoal = "Find the best DeFi yield pool, read subnet contract state to verify safety, publish newsletter report";
+    } else if (scenario === "meetup" || scenario === "research") {
+      finalGoal = "Summarize proposals, assess voter sentiment, flag Sybil voters, and draft announcement";
     } else {
-      finalGoal = "Analyze Avalanche C-Chain developer trends, translate the results to Japanese for a developer meetup invite, and check node addresses and RSVPs for Sybil risk";
+      finalGoal = "Audit new contract, check on-chain metrics, assess counterparty risk, generate security report";
     }
   }
 
@@ -206,20 +198,23 @@ export async function runOrchestrator(
     return;
   }
 
-  // Fetch agent parameters and EIP-8004 reputation summary dynamically on-chain
+  // Fetch agent parameters, EIP-8004 reputation, and live TrustRegistry score dynamically on-chain
   const agentsInfo = [];
-  const keys: ("dataFeedPro" | "newService" | "suspiciousAgent")[] = ["dataFeedPro", "newService", "suspiciousAgent"];
+  const keys = Object.keys(providerProfiles);
+
+  const TrustRegistryABI = parseAbi([
+    "function getCachedScore(address agentAddress) external view returns (uint8 score, bool unregistered, bool sybilFlagged, uint32 cachedAt)",
+    "function getCompositeScore(address agentAddress) external returns (uint8 score, bool unregistered, bool sybilFlagged, uint32 cachedAt)"
+  ]);
 
   for (const key of keys) {
     const profile = providerProfiles[key];
-    
-    let contractAddress: `0x${string}`;
-    if (key === "dataFeedPro") contractAddress = deployed.contracts.TaskAgent_DataFeedPro;
-    else if (key === "newService") contractAddress = deployed.contracts.TaskAgent_NewService;
-    else contractAddress = deployed.contracts.TaskAgent_SuspiciousAgent;
+    const contractAddress = deployed.contracts[profile.contractName];
 
     let feedbackCount = 0n;
     let averageRating = 0n;
+    let trustScore = profile.trustScore;
+    let sybilFlagged = key === "suspiciousAgent";
 
     try {
       const repSummary = await dependencies.runtime.publicClient.readContract({
@@ -230,7 +225,21 @@ export async function runOrchestrator(
       feedbackCount = repSummary[0];
       averageRating = repSummary[1];
     } catch (err) {
-      // registry might not be seeded/feedback not given yet
+      // registry might not be seeded yet
+    }
+
+    try {
+      // Fetch live score from TrustRegistry
+      const cached = await dependencies.runtime.publicClient.readContract({
+        address: deployed.contracts.TrustRegistry,
+        abi: TrustRegistryABI,
+        functionName: "getCachedScore",
+        args: [profile.walletAddress],
+      }) as any;
+      trustScore = Number(cached[0] ?? cached.score);
+      sybilFlagged = cached[2] ?? cached.sybilFlagged;
+    } catch (err) {
+      // fallback to profile if no cached score
     }
 
     agentsInfo.push({
@@ -239,11 +248,9 @@ export async function runOrchestrator(
       contractAddress,
       feedbackCount: feedbackCount.toString(),
       averageRating: averageRating.toString(),
-      capabilities: key === "dataFeedPro" 
-        ? "DeFi market analysis, data feeds, on-chain metrics retrieval."
-        : key === "newService"
-        ? "Translation, localization, writing, markdown editing/newsletter generation."
-        : "High-frequency trading signals, security scanning, Sybil RSVP checking, arbitrage detection."
+      trustScore,
+      sybilFlagged,
+      capabilities: profile.capabilities || []
     });
   }
 
@@ -252,7 +259,7 @@ export async function runOrchestrator(
 
   logger.log(`\n[Lead Agent] Planned workflow:`);
   steps.forEach((step, idx) => {
-    logger.log(`  Step ${idx + 1}: [${step.agentKey}] -> "${step.prompt}"`);
+    logger.log(`  Step ${idx + 1}: Required capability [${step.requiredCapability}] (min trust: ${step.trustThreshold}) -> "${step.prompt}"`);
   });
 
   const stepOutputs: string[] = [];
@@ -260,8 +267,26 @@ export async function runOrchestrator(
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     logger.log(`\n--------------------------------------------------`);
-    logger.log(`Executing Step ${i + 1}/${steps.length}: calling ${step.agentKey}`);
+    logger.log(`Executing Step ${i + 1}/${steps.length}: resolving capability "${step.requiredCapability}"`);
     logger.log(`--------------------------------------------------`);
+
+    // Dynamic routing: find all candidate agents that possess the matching capability
+    const candidates = agentsInfo.filter(a => a.capabilities.includes(step.requiredCapability));
+    if (candidates.length === 0) {
+      throw new Error(`No agent found with capability: ${step.requiredCapability}`);
+    }
+
+    // Filter by trust score threshold and exclude Sybil flagged agents
+    const qualified = candidates.filter(a => a.trustScore >= step.trustThreshold && !a.sybilFlagged);
+    const finalCandidates = qualified.length > 0 ? qualified : candidates;
+
+    // Sort by fee ascending to choose the cheapest agent (minimum AVAX spent)
+    finalCandidates.sort((a, b) => Number(a.profile.serviceFee) - Number(b.profile.serviceFee));
+    const chosen = finalCandidates[0];
+
+    logger.log(`[Lead Agent] Dynamic routing resolved:`);
+    logger.log(`  Candidates: ${candidates.map(c => `${c.key} (score: ${c.trustScore}, fee: ${Number(c.profile.serviceFee)/1e18} AVAX)`).join(", ")}`);
+    logger.log(`  Chosen Agent: ${chosen.key} (Tier determined dynamically by TrustRegistry score of ${chosen.trustScore})`);
 
     // Resolve prompt placeholders (e.g. {{output_0}}, {{output_1}})
     let resolvedPrompt = step.prompt;
@@ -269,13 +294,8 @@ export async function runOrchestrator(
       resolvedPrompt = resolvedPrompt.replace(new RegExp(`\\{\\{output_${j}\\}\\}`, "g"), stepOutputs[j]);
     }
 
-    let contractAddress: `0x${string}`;
-    if (step.agentKey === "dataFeedPro") contractAddress = deployed.contracts.TaskAgent_DataFeedPro;
-    else if (step.agentKey === "newService") contractAddress = deployed.contracts.TaskAgent_NewService;
-    else contractAddress = deployed.contracts.TaskAgent_SuspiciousAgent;
-
     logger.log(`[Lead Agent] Prompt: "${resolvedPrompt}"`);
-    const output = await executeOnChainStep(dependencies.runtime, step.agentKey, contractAddress, resolvedPrompt, logger);
+    const output = await executeOnChainStep(dependencies.runtime, chosen.key, chosen.contractAddress, resolvedPrompt, logger);
     stepOutputs.push(output);
 
     logger.log(`[Lead Agent] Output: ${output.slice(0, 150)}${output.length > 150 ? '...' : ''}`);
@@ -321,8 +341,6 @@ async function executeOnChainStep(
 
   const receipt = await runtime.publicClient.waitForTransactionReceipt({ hash: txHash });
   
-  // Find taskId from TaskRequested event log
-  // event TaskRequested(uint256 indexed taskId, address indexed requester, uint8 taskType, uint256 payment)
   const log = receipt.logs[0];
   const taskId = BigInt(log?.topics[1] ?? "1");
 
@@ -330,33 +348,31 @@ async function executeOnChainStep(
 
   // 3. Invoke the agent on-demand
   logger.log(`[Orchestrator] Invoking agent ${agentKey} directly for Task #${taskId}...`);
-  let output: string;
-  if (agentKey === "dataFeedPro") {
-    output = await executeDataFeedPro(taskId);
-  } else if (agentKey === "newService") {
-    output = await executeNewService(taskId);
-  } else if (agentKey === "suspiciousAgent") {
-    output = await executeSuspiciousAgent(taskId);
-  } else {
+  const profile = providerProfiles[agentKey];
+  if (!profile) {
     throw new Error(`Unknown agent key: ${agentKey}`);
   }
+  const output = await profile.execute(taskId);
 
   logger.log(`🟢 [Orchestrator] Task #${taskId} executed and completed on-chain by ${agentKey}!`);
   return output;
 }
 
 function getTaskTypeForAgentAndPrompt(agentKey: string, prompt: string): number {
-  if (agentKey === "dataFeedPro") {
-    if (prompt.toLowerCase().includes("summarize") || prompt.toLowerCase().includes("agenda")) {
+  if (agentKey === "dataFeedPro" || agentKey === "priceOracle") {
+    if (prompt.toLowerCase().includes("summarize") || prompt.toLowerCase().includes("agenda") || prompt.toLowerCase().includes("format")) {
       return 0; // TextSummarization
     }
     return 2; // DataAnalysis
   }
-  if (agentKey === "newService") {
-    return 3; // Translation
+  if (agentKey === "newService" || agentKey === "summaryBot") {
+    if (prompt.toLowerCase().includes("translate")) {
+      return 3; // Translation
+    }
+    return 0; // TextSummarization
   }
-  if (agentKey === "suspiciousAgent") {
-    if (prompt.toLowerCase().includes("review") || prompt.toLowerCase().includes("verify")) {
+  if (agentKey === "suspiciousAgent" || agentKey === "riskAssessor" || agentKey === "codeAuditor" || agentKey === "onChainIndexer") {
+    if (prompt.toLowerCase().includes("review") || prompt.toLowerCase().includes("verify") || prompt.toLowerCase().includes("audit")) {
       return 1; // CodeReview
     }
     return 4; // Custom

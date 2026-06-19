@@ -34,7 +34,17 @@ export default defineConfig({
       chainType: "l1",
       chainId: 43113,
       url: configVariable("FUJI_RPC_URL"),
-      accounts: [configVariable("DEPLOYER_PRIVATE_KEY")],
+      accounts: [
+        configVariable("DEPLOYER_PRIVATE_KEY"),
+        configVariable("DATAFEED_PRO_PRIVATE_KEY"),
+        configVariable("NEW_SERVICE_PRIVATE_KEY"),
+        configVariable("SUSPICIOUS_AGENT_PRIVATE_KEY"),
+        configVariable("PRICE_ORACLE_PRIVATE_KEY"),
+        configVariable("SUMMARY_BOT_PRIVATE_KEY"),
+        configVariable("RISK_ASSESSOR_PRIVATE_KEY"),
+        configVariable("CODE_AUDITOR_PRIVATE_KEY"),
+        configVariable("ONCHAIN_INDEXER_PRIVATE_KEY"),
+      ],
     },
     local_l1: {
       type: "http",
