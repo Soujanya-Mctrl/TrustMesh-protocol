@@ -30,7 +30,8 @@
     "seed:local": "hardhat run scripts/seed.ts --network localhost",
     "seed:fuji": "hardhat run scripts/seed.ts --network fuji",
     "dashboard": "npm run start --workspace @trustmesh/dashboard",
-    "demo": "node scripts/interactive-demo.js"
+    "demo": "node scripts/interactive-demo.js",
+    "l1:setup": "node scripts/local-l1-setup.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",

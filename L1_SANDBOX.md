@@ -78,6 +78,20 @@ local_l1: {
 
 ## 🚢 4. Deploy and Seed the L1 Sandbox
 
+You can deploy and seed your local L1 sandbox in one step using our automated helper script. Once your L1 is running via `avalanche blockchain deploy trustmesh`, simply execute:
+
+```bash
+npm run l1:setup
+```
+
+This script will:
+1. Query your local node to auto-discover the Blockchain ID for the `trustmesh` L1 subnet.
+2. Automatically save the correct RPC URL and Blockchain ID parameters to your local `.env`.
+3. Deploy the ERC-8004 registries and routing engine directly to the local L1.
+4. Seed local agent ratings, metrics, and profiles on the L1 chain.
+
+### Manual Alternative (If preferred)
+
 1. **Deploy Contracts**:
    Deploy the ERC-8004 registries and routing engine directly to your local L1:
    ```bash
@@ -90,6 +104,7 @@ local_l1: {
    ```bash
    npx hardhat run scripts/seed.ts --network local_l1
    ```
+
 
 ---
 
