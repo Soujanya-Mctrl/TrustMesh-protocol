@@ -686,16 +686,16 @@ export default function DashboardPage() {
 
   return (
     <div className={theme === "dark" ? "dark" : ""}>
-      <div className="min-h-screen bg-zinc-50 dark:bg-[#18181B] text-zinc-900 dark:text-zinc-50 font-sans flex transition-colors duration-200">
+      <div className="h-screen overflow-hidden bg-zinc-50 dark:bg-[#18181B] text-zinc-900 dark:text-zinc-50 font-sans flex transition-colors duration-200">
         
         {/* Collapsible Left Sidebar */}
         <aside 
-          className={`border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 transition-all duration-300 z-30
+          className={`h-full border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 transition-all duration-300 z-30
             ${sidebarOpen ? "w-64" : "w-0 -translate-x-full md:w-16 md:translate-x-0 overflow-hidden"}`}
         >
           {/* Brand Header */}
-          <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="flex items-center gap-2 overflow-hidden">
+          <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0 group">
+            <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded bg-[#E84142] flex items-center justify-center shrink-0">
                 <Shield className="w-5 h-5 text-white" />
               </div>
@@ -708,7 +708,7 @@ export default function DashboardPage() {
             {sidebarOpen && (
               <button 
                 onClick={() => setSidebarOpen(false)} 
-                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded"
+                className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1443,8 +1443,6 @@ console.log("Tx Hash:", tx.transactionHash);`}
       {selectedAgent && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto relative shadow-2xl transition-all p-6 md:p-8 space-y-6 text-zinc-900 dark:text-zinc-50">
-            {/* Decorative left brand line */}
-            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#E84142] rounded-l-2xl" />
 
             {/* Close button */}
             <button
