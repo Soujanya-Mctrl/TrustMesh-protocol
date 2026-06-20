@@ -292,13 +292,21 @@ export default function DashboardPage() {
         transport: custom(window.ethereum),
       });
 
-      const tier = meta.tier;
       const amount = agentId === 1 ? parseEther("0.001") : agentId === 2 ? parseEther("0.002") : parseEther("0.0005");
       const serviceUrl = agentId === 1 ? "http://localhost:3001/request-service" : agentId === 2 ? "http://localhost:3002/request-service" : "http://localhost:3003/request-service";
 
+      const tier = await publicClient.readContract({
+        address: deployed.contracts.PolicyEngine,
+        abi: parseAbi([
+          "function evaluateTier(address payee, uint256 amountAvax) external view returns (uint8)"
+        ]),
+        functionName: "evaluateTier",
+        args: [meta.address, amount],
+      }) as number;
+
       setExecutionResult(prev => ({ 
         ...prev, 
-        [agentId]: { status: `Processing payment for ${meta.name} (Tier ${tier})...` } 
+        [agentId]: { status: `Processing payment for ${meta.name} via ${tier === 0 ? "Direct Pay" : tier === 1 ? "Escrow" : "Consensus Verification"}...` } 
       }));
 
       if (tier === 0) {
@@ -922,13 +930,13 @@ export default function DashboardPage() {
                       TrustMesh Autonomous Orchestration
                     </h2>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl font-medium leading-relaxed">
-                      Securing micro-payment and task execution routes on the {isFuji ? "Avalanche Fuji Testnet" : "Local Hardhat Network"}. Using an automated multi-tier architecture, agents are locked into escrows or direct settled depending on real-time reputation scores.
+                      Securing micro-payment and task execution routes on the {isFuji ? "Avalanche Fuji Testnet" : "Local Hardhat Network"}. Transactions are routed dynamically via direct pay, escrow locks, or consensus validation depending on on-chain reputation scores and policy rules.
                     </p>
                   </div>
 
                   <div className="flex gap-6 shrink-0 border-l border-zinc-200 dark:border-zinc-800 pl-6 hidden md:flex">
                     <div className="text-center">
-                      <div className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">3</div>
+                      <div className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">{providers.length}</div>
                       <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">Agents</div>
                     </div>
                     <div className="text-center">
@@ -979,25 +987,25 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap items-center gap-2 text-xs pl-2">
                     <span className="text-zinc-400 font-semibold">Presets:</span>
                     <button
-                      onClick={() => setOrchestratorPrompt("Route payment through DataFeed Pro for standard weather telemetry updates")}
+                      onClick={() => setOrchestratorPrompt("Request standard weather telemetry updates")}
                       disabled={executingOrchestrator}
                       className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg font-semibold transition"
                     >
-                      Direct Pay (Tier 0)
+                      Telemetry Query
                     </button>
                     <button
-                      onClick={() => setOrchestratorPrompt("Analyze data translations using NewService with secure escrow lockup")}
+                      onClick={() => setOrchestratorPrompt("Analyze data translations")}
                       disabled={executingOrchestrator}
                       className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg font-semibold transition relative"
                     >
-                      Escrow Lock (Tier 1)
+                      Translation Service
                     </button>
                     <button
-                      onClick={() => setOrchestratorPrompt("Trigger code audit validation for SuspiciousAgent to check sandbox parameters")}
+                      onClick={() => setOrchestratorPrompt("Trigger sandbox verification to check code security parameters")}
                       disabled={executingOrchestrator}
                       className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg font-semibold transition relative"
                     >
-                      Manual Validation (Tier 2)
+                      Sandbox Verification
                     </button>
                   </div>
 
@@ -1049,7 +1057,6 @@ export default function DashboardPage() {
                               <th className="py-3 px-4">Agent Profile</th>
                               <th className="py-3 px-4">Address & Balance</th>
                               <th className="py-3 px-4">On-Chain Score</th>
-                              <th className="py-3 px-4 text-center">Tier</th>
                               <th className="py-3 px-4">Status</th>
                               <th className="py-3 px-4 text-right">Actions</th>
                             </tr>
@@ -1064,7 +1071,7 @@ export default function DashboardPage() {
                                 scoreBadge = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
                               }
                               
-                              const tierColor = agent.tier === 0 ? "text-emerald-500" : agent.tier === 1 ? "text-amber-500" : "text-red-500";
+
 
                               return (
                                 <tr 
@@ -1125,10 +1132,7 @@ export default function DashboardPage() {
                                     </div>
                                   </td>
 
-                                  {/* Tier */}
-                                  <td className="py-3 px-4 text-center font-mono font-bold">
-                                    <span className={tierColor}>Tier {agent.tier}</span>
-                                  </td>
+
 
                                   {/* Status */}
                                   <td className="py-3 px-4">
@@ -1222,11 +1226,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                   <div className="border border-zinc-200 dark:border-zinc-800/80 p-5 rounded-xl space-y-3">
-                    <h4 className="text-xs font-bold uppercase text-zinc-400">Reputation Tiers</h4>
+                    <h4 className="text-xs font-bold uppercase text-zinc-400">Settlement Routing Rules</h4>
                     <ul className="text-xs space-y-2 text-zinc-600 dark:text-zinc-400 font-semibold leading-relaxed">
-                      <li>• <span className="text-emerald-500 font-bold">Tier 0 (Score &ge; 70)</span>: Instant direct settlement.</li>
-                      <li>• <span className="text-amber-500 font-bold">Tier 1 (Score 40-69)</span>: Funds secured in EscrowVault pending validation.</li>
-                      <li>• <span className="text-red-500 font-bold">Tier 2 (Score &lt; 40)</span>: Mandatory manual approval required.</li>
+                      <li>• <span className="text-emerald-500 font-bold">Direct Pay (Score &ge; 70)</span>: Instant direct settlement.</li>
+                      <li>• <span className="text-amber-500 font-bold">Escrow Secure (Score 40-69)</span>: Funds secured in EscrowVault pending validation.</li>
+                      <li>• <span className="text-red-500 font-bold">Consensus Validation (Score &lt; 40)</span>: Mandatory manual approval required.</li>
                     </ul>
                   </div>
                   <div className="border border-zinc-200 dark:border-zinc-800/80 p-5 rounded-xl space-y-3">
@@ -1291,11 +1295,11 @@ export default function DashboardPage() {
                       TrustMesh is an autonomous agent communication network that implements decentralized, trust-based routing for transactions and logic execution. Based on EIP-8004 specifications, agents are registered with decentralized metadata pointers (IPFS JSONs) and evaluated using real-time on-chain trust metrics.
                     </p>
                     <div className="p-4 bg-zinc-50 dark:bg-[#0E0E10] border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2">
-                      <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Supported Routing Tiers:</div>
+                      <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Supported Settlement Routing Modes:</div>
                       <ul className="text-[11px] text-zinc-650 dark:text-zinc-400 space-y-1 list-disc pl-4 leading-relaxed font-semibold">
-                        <li><strong>Tier 0 (Score &ge; 70)</strong>: Direct Pay. Micropayments are settled directly to the agent's wallet with instant finality.</li>
-                        <li><strong>Tier 1 (Score 40-69)</strong>: Escrow Secure. Payments are locked inside the commit-lock-reveal <code>EscrowVault</code> and only released upon cryptographic verification of job deliverables.</li>
-                        <li><strong>Tier 2 (Score &lt; 40)</strong>: Consensus Validation. Interactions are paused, and decentralized validator consensus is requested via the <code>ValidationRegistry</code> before funds are routed.</li>
+                        <li><strong>Direct Pay (Score &ge; 70)</strong>: Micropayments are settled directly to the agent's wallet with instant finality.</li>
+                        <li><strong>Escrow Secure (Score 40-69)</strong>: Payments are locked inside the commit-lock-reveal <code>EscrowVault</code> and only released upon cryptographic verification of job deliverables.</li>
+                        <li><strong>Consensus Validation (Score &lt; 40)</strong>: Interactions are paused, and decentralized validator consensus is requested via the <code>ValidationRegistry</code> before funds are routed.</li>
                       </ul>
                     </div>
                   </div>
@@ -1445,17 +1449,19 @@ console.log("Tx Hash:", tx.transactionHash);`}
             {/* Close button */}
             <button
               onClick={() => setSelectedAgent(null)}
-              className="absolute right-4 top-4 p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded-lg transition"
+              className="absolute right-4 top-4 md:right-6 md:top-6 p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded-lg transition z-10"
             >
               <X className="w-5 h-5" />
             </button>
 
             {/* Header info */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-900 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-900 pb-4 pr-10 sm:pr-12">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-[#E84142]/10 border border-[#E84142]/20 flex items-center justify-center text-[#E84142] shrink-0">
-                  <Shield className="w-6 h-6" />
-                </div>
+                <img 
+                  src={`https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedAgent.name)}`}
+                  alt={selectedAgent.name}
+                  className="w-12 h-12 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 shrink-0"
+                />
                 <div>
                   <h3 className="text-xl font-display font-extrabold uppercase tracking-tight text-zinc-900 dark:text-zinc-50 leading-tight">
                     {selectedAgent.name}
@@ -1469,9 +1475,7 @@ console.log("Tx Hash:", tx.transactionHash);`}
                           : "bg-red-500/10 text-red-500 border border-red-500/20"}`}>
                       {selectedAgent.score >= 70 ? "HIGH TRUST" : selectedAgent.score >= 40 ? "MEDIUM TRUST" : "CRITICAL"}
                     </span>
-                    <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-150 dark:border-zinc-800/50 px-1.5 py-0.5 rounded font-mono">
-                      Tier {selectedAgent.tier}
-                    </span>
+
                     {selectedAgent.sybilFlagged && (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
                         Sybil Flagged
@@ -1520,13 +1524,36 @@ console.log("Tx Hash:", tx.transactionHash);`}
                   {selectedAgent.registrationAge || "N/A"}
                 </div>
               </div>
+              {selectedAgent.uri && (
+                <div className="space-y-1.5 sm:col-span-2 pt-2.5 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                  <div className="text-[10px] font-bold uppercase text-zinc-400">ERC-8004 Metadata (IPFS/Pinata):</div>
+                  <div className="font-semibold break-all text-[#E84142] hover:underline flex flex-wrap items-center gap-1.5">
+                    <a 
+                      href={selectedAgent.uri.startsWith("ipfs://") 
+                        ? `https://ipfs.io/ipfs/${selectedAgent.uri.slice(7)}` 
+                        : selectedAgent.uri} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5"
+                    >
+                      <span>{selectedAgent.uri}</span>
+                      <span className="text-[9px] font-sans font-bold uppercase px-1.5 py-0.25 bg-[#E84142]/10 rounded border border-[#E84142]/20 normal-case tracking-normal">Open JSON</span>
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* On-chain Performance Metrics */}
             <div className="space-y-3">
-              <h4 className="text-[11px] font-bold uppercase text-zinc-400 dark:text-zinc-500 tracking-wider">
-                On-Chain Performance Metrics
-              </h4>
+              <div className="flex flex-col space-y-1">
+                <h4 className="text-[11px] font-bold uppercase text-zinc-400 dark:text-zinc-500 tracking-wider">
+                  On-Chain Performance Metrics
+                </h4>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-normal font-medium">
+                  Real-time contract state populated via on-chain seeding & live settlement.
+                </p>
+              </div>
               {loadingMetrics ? (
                 <div className="flex items-center gap-2 text-xs text-zinc-400 font-bold py-4">
                   <RefreshCw className="w-4 h-4 animate-spin text-[#E84142]" />

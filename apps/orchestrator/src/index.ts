@@ -50,6 +50,33 @@ const TaskAgentABI = parseAbi([
 
 function getFallbackPlan(goal: string): WorkflowStep[] {
   const normalized = goal.toLowerCase();
+  if (normalized.includes("telemetry") || normalized.includes("weather") || normalized.includes("data-feed") || normalized.includes("subnet")) {
+    return [
+      {
+        requiredCapability: "get_subnet_stats",
+        prompt: "Request standard weather telemetry updates",
+        trustThreshold: 40,
+      }
+    ];
+  }
+  if (normalized.includes("translate") || normalized.includes("translation")) {
+    return [
+      {
+        requiredCapability: "translate_text",
+        prompt: "Translate the input payload",
+        trustThreshold: 40,
+      }
+    ];
+  }
+  if (normalized.includes("sandbox") || normalized.includes("verification") || normalized.includes("sybil")) {
+    return [
+      {
+        requiredCapability: "flag_anomalies",
+        prompt: "Execute sandbox verification check",
+        trustThreshold: 20,
+      }
+    ];
+  }
   if (normalized.includes("yield") || normalized.includes("finance") || normalized.includes("stake")) {
     // Scenario 1: DeFi Yield Hunt
     return [
@@ -284,9 +311,19 @@ export async function runOrchestrator(
     finalCandidates.sort((a, b) => Number(a.profile.serviceFee) - Number(b.profile.serviceFee));
     const chosen = finalCandidates[0];
 
+    // Query PolicyEngine on-chain to decide the tier dynamically based on smart contract logic
+    const tier = await dependencies.runtime.publicClient.readContract({
+      address: deployed.contracts.PolicyEngine,
+      abi: parseAbi([
+        "function evaluateTier(address payee, uint256 amountAvax) external view returns (uint8)"
+      ]),
+      functionName: "evaluateTier",
+      args: [chosen.profile.walletAddress, BigInt(chosen.profile.serviceFee)],
+    }) as number;
+
     logger.log(`[Lead Agent] Dynamic routing resolved:`);
     logger.log(`  Candidates: ${candidates.map(c => `${c.key} (score: ${c.trustScore}, fee: ${Number(c.profile.serviceFee)/1e18} AVAX)`).join(", ")}`);
-    logger.log(`  Chosen Agent: ${chosen.key} (Tier determined dynamically by TrustRegistry score of ${chosen.trustScore})`);
+    logger.log(`  Chosen Agent: ${chosen.key} (Tier ${tier} resolved dynamically by PolicyEngine smart contract logic)`);
 
     // Resolve prompt placeholders (e.g. {{output_0}}, {{output_1}})
     let resolvedPrompt = step.prompt;

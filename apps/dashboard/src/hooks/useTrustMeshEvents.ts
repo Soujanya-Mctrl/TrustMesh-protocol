@@ -136,6 +136,7 @@ export function useTrustMeshEvents(deployed: any) {
             let description = "";
             let capabilities: string[] = [];
             let registrationAge = "N/A";
+            let uri = "";
 
             try {
               const cached = await client.readContract({
@@ -150,9 +151,20 @@ export function useTrustMeshEvents(deployed: any) {
               score = Number(cached[0]);
               sybilFlagged = cached[2];
               
-              if (score >= 70) tier = 0;
-              else if (score >= 40) tier = 1;
-              else tier = 2;
+              try {
+                const amount = agent.id === 1 ? 1000000000000000n : agent.id === 2 ? 2000000000000000n : 500000000000000n;
+                const dynamicTier = await client.readContract({
+                  address: deployed.contracts.PolicyEngine,
+                  abi: parseAbi([
+                    "function evaluateTier(address payee, uint256 amountAvax) external view returns (uint8)"
+                  ]),
+                  functionName: "evaluateTier",
+                  args: [agent.address, amount],
+                }) as number;
+                tier = Number(dynamicTier);
+              } catch {
+                tier = 0;
+              }
 
               const balWei = await client.getBalance({ address: agent.address });
               balance = (Number(balWei) / 1e18).toFixed(4);
@@ -174,7 +186,7 @@ export function useTrustMeshEvents(deployed: any) {
               }
 
               // Read tokenURI
-              const uri = await client.readContract({
+              uri = await client.readContract({
                 address: deployed.contracts.AgentIdentityRegistry,
                 abi: parseAbi([
                   "function tokenURI(uint256 tokenId) external view returns (string memory)"
@@ -214,7 +226,8 @@ export function useTrustMeshEvents(deployed: any) {
               balance,
               description,
               capabilities,
-              registrationAge
+              registrationAge,
+              uri
             };
           })
         );
@@ -222,6 +235,16 @@ export function useTrustMeshEvents(deployed: any) {
       } catch {
         // Fallback to defaults
         setProviders(AGENTS_METADATA.map(a => {
+          const uris: Record<number, string> = {
+            1: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagd",
+            2: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jage",
+            3: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagf",
+            4: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagg",
+            5: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagh",
+            6: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagi",
+            7: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagj",
+            8: "ipfs://QmYwAPJzv5CZ1iaa45t2jagdfa45t2jagd892415t2jagk"
+          };
           const score = 
             a.id === 1 ? 92 :
             a.id === 2 ? 55 :
@@ -230,7 +253,7 @@ export function useTrustMeshEvents(deployed: any) {
             a.id === 5 ? 64 :
             a.id === 6 ? 78 :
             a.id === 7 ? 95 : 82;
-          const tier = score >= 70 ? 0 : score >= 40 ? 1 : 2;
+          const tier = 0; // Default to Tier 0 initially in offline fallback
           const caps: Record<number, string[]> = {
             1: ["data-feed", "analytics", "real-time-pricing"],
             2: ["translation", "summarization", "nlp"],
@@ -260,7 +283,8 @@ export function useTrustMeshEvents(deployed: any) {
             balance: "10.0000",
             description: descs[a.id] || "",
             capabilities: caps[a.id] || [],
-            registrationAge: a.id === 1 ? "300 days" : a.id === 2 ? "63 days" : a.id === 3 ? "180 days" : "150 days"
+            registrationAge: a.id === 1 ? "300 days" : a.id === 2 ? "63 days" : a.id === 3 ? "180 days" : "150 days",
+            uri: uris[a.id]
           };
         }));
       }
