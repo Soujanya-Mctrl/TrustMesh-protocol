@@ -96,6 +96,7 @@ const PolicyEngineABI = parseAbi([
 ]);
 
 const EscrowVaultABI = parseAbi([
+  "event EscrowCreated(uint256 indexed escrowId, address indexed payer, address indexed payee, uint256 amount, bytes32 expectedHash)",
   "event EscrowReleased(uint256 indexed escrowId, address indexed payee, uint256 amount)",
   "function escrows(uint256 escrowId) external view returns (address payer, address payee, uint256 amount, bytes32 expectedHash, uint64 createdAt, uint8 state)"
 ]);
@@ -298,6 +299,7 @@ export function useTrustMeshEvents(deployed: any) {
 
     let unwatchPE: (() => void) | null = null;
     let unwatchEV: (() => void) | null = null;
+    let unwatchEVCreated: (() => void) | null = null;
     let unwatchVR: (() => void) | null = null;
     let unwatchVRReq: (() => void) | null = null;
     let reconnectTimeout: any = null;
@@ -390,6 +392,39 @@ export function useTrustMeshEvents(deployed: any) {
               };
 
               setEvents(prev => [newEvent, ...prev].slice(0, 10));
+            });
+          }
+        });
+
+        // 2b. Listen to EscrowVault.EscrowCreated
+        unwatchEVCreated = client.watchContractEvent({
+          address: deployed.contracts.EscrowVault,
+          abi: EscrowVaultABI,
+          eventName: "EscrowCreated",
+          onLogs: (logs: any) => {
+            logs.forEach((log: any) => {
+              const { payee, amount } = log.args;
+              if (!payee) return;
+              const agent = getAgent(payee);
+              const amountAvax = amount ? (Number(amount) / 1e18).toFixed(4) : "?";
+
+              setProviders(prev => prev.map(p => {
+                if (p.address.toLowerCase() === payee.toLowerCase()) {
+                  return { ...p, status: "Escrow locked 🔒" };
+                }
+                return p;
+              }));
+
+              const id = `ec-${Date.now()}-${Math.random()}`;
+              const newEvent: ActivityEvent = {
+                id,
+                timestamp: Date.now(),
+                type: "created",
+                agentName: agent.name,
+                message: `Escrow locked for ${agent.name} (${amountAvax} AVAX)`
+              };
+
+              setEvents(prev => [newEvent, ...prev].slice(0, 15));
             });
           }
         });
@@ -522,6 +557,7 @@ export function useTrustMeshEvents(deployed: any) {
     return () => {
       if (unwatchPE) unwatchPE();
       if (unwatchEV) unwatchEV();
+      if (unwatchEVCreated) unwatchEVCreated();
       if (unwatchVR) unwatchVR();
       if (unwatchVRReq) unwatchVRReq();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);

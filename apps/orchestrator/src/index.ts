@@ -332,7 +332,7 @@ export async function runOrchestrator(
     }
 
     logger.log(`[Lead Agent] Prompt: "${resolvedPrompt}"`);
-    const output = await executeOnChainStep(dependencies.runtime, chosen.key, chosen.contractAddress, resolvedPrompt, logger);
+    const output = await executeOnChainStep(dependencies, chosen.key, chosen, resolvedPrompt, logger);
     stepOutputs.push(output);
 
     logger.log(`[Lead Agent] Output: ${output.slice(0, 150)}${output.length > 150 ? '...' : ''}`);
@@ -344,55 +344,109 @@ export async function runOrchestrator(
 }
 
 async function executeOnChainStep(
-  runtime: ViemRuntime,
+  dependencies: OrchestratorDependencies,
   agentKey: string,
-  contractAddress: `0x${string}`,
+  chosen: any,
   prompt: string,
   logger: any
 ): Promise<string> {
-  const taskType = getTaskTypeForAgentAndPrompt(agentKey, prompt);
-  
-  // 1. Get task price
-  const price = await runtime.publicClient.readContract({
-    address: contractAddress,
-    abi: TaskAgentABI,
-    functionName: "taskPrices",
-    args: [taskType],
-  }) as bigint;
+  const profile = chosen.profile;
+  const amount = profile.serviceFee || "1000000000000000"; // 0.001 ether default
+  const serviceUrl = `http://localhost:${profile.port}/request-service`;
 
-  logger.log(`[SDK] Task price for ${agentKey} is ${Number(price) / 1e18} AVAX.`);
+  logger.log(`[Orchestrator] Routing payment via SDK client for ${agentKey}...`);
 
-  // 2. Submit task
-  const inputURI = `data:text/plain,${encodeURIComponent(prompt)}`;
-  const inputHash = keccak256(toBytes(prompt));
+  const result = await dependencies.client.pay(
+    profile.walletAddress,
+    amount.toString(),
+    serviceUrl,
+    prompt
+  );
 
-  logger.log(`[SDK] Submitting requestTask on-chain at ${contractAddress}...`);
-  
-  const txHash = await runtime.walletClient.writeContract({
-    address: contractAddress,
-    abi: TaskAgentABI,
-    functionName: "requestTask",
-    args: [taskType, inputURI, inputHash],
-    value: price,
-  });
+  if (result.tier === 2 && result.status === "simulation_started") {
+    logger.log(`\n⚠️  [Orchestrator] Tier 2 Safety Flag Triggered for ${agentKey}!`);
+    logger.log(`   Simulation ID: ${result.simulationId}`);
+    logger.log(`   Anomaly Flags: ${result.riskReport?.anomalyFlags.join(", ")}`);
+    logger.log(`   Recommended Action: ${result.riskReport?.recommendedAction}`);
+    
+    logger.log(`\n[Orchestrator] 👥 Human-in-the-Loop Escalation Required.`);
+    logger.log(`   Simulating human review...`);
+    await new Promise(r => setTimeout(r, 3000));
+    logger.log(`   [Human Admin] Decision: APPROVE execution for Validation Request ${result.simulationId}`);
 
-  const receipt = await runtime.publicClient.waitForTransactionReceipt({ hash: txHash });
-  
-  const log = receipt.logs[0];
-  const taskId = BigInt(log?.topics[1] ?? "1");
+    // Call on-chain PolicyEngine.humanApprove to approve the validation
+    const txHash = await dependencies.runtime.walletClient.writeContract({
+      address: dependencies.client.config.policyEngineAddress as `0x${string}`,
+      abi: parseAbi(["function humanApprove(bytes32 requestHash, bool passed) external"]),
+      functionName: "humanApprove",
+      args: [result.simulationId as `0x${string}`, true],
+    });
+    logger.log(`   [Admin] Approval submitted on-chain: ${txHash}`);
+    await dependencies.runtime.publicClient.waitForTransactionReceipt({ hash: txHash });
+    logger.log(`   [Admin] Validation request officially approved.`);
 
-  logger.log(`[SDK] Task requested! Transaction hash: ${txHash}. Task ID: ${taskId}`);
+    // Execute the agent directly now that validation is approved
+    logger.log(`[Orchestrator] Invoking agent ${agentKey} directly after validation approval...`);
+    const output = await profile.execute(1n);
+    logger.log(`🟢 [Orchestrator] Task executed and completed by ${agentKey}!`);
 
-  // 3. Invoke the agent on-demand
-  logger.log(`[Orchestrator] Invoking agent ${agentKey} directly for Task #${taskId}...`);
-  const profile = providerProfiles[agentKey];
-  if (!profile) {
-    throw new Error(`Unknown agent key: ${agentKey}`);
+    // Submit feedback to ReputationRegistry to complete the feedback loop
+    try {
+      logger.log(`[Orchestrator] Submitting reputation feedback for ${agentKey}...`);
+      const identityRegistry = deployed.contracts.IdentityRegistry || deployed.contracts.AgentIdentityRegistry;
+      const reputationRegistry = deployed.contracts.ReputationRegistry;
+      const agentId = await dependencies.runtime.publicClient.readContract({
+        address: identityRegistry as `0x${string}`,
+        abi: parseAbi(["function getAgentIdByWallet(address who) external view returns (uint256)"]),
+        functionName: "getAgentIdByWallet",
+        args: [profile.walletAddress as `0x${string}`],
+      }) as bigint;
+
+      const feedbackHash = await dependencies.runtime.walletClient.writeContract({
+        address: reputationRegistry as `0x${string}`,
+        abi: parseAbi([
+          "function giveFeedback(uint256 agentId, int128 value, uint8 valueDecimals, string calldata tag1, string calldata tag2, string calldata endpoint, string calldata feedbackURI, bytes32 feedbackHash) external"
+        ]),
+        functionName: "giveFeedback",
+        args: [
+          agentId,
+          3n, // rating value (3/5 for quarantined agent)
+          0,
+          "quarantine-passed",
+          "",
+          "",
+          "",
+          keccak256(toBytes(`Approved execution: ${result.simulationId}`)),
+        ],
+      });
+      await dependencies.runtime.publicClient.waitForTransactionReceipt({ hash: feedbackHash });
+      logger.log(`🟢 [Orchestrator] Reputation feedback submitted: ${feedbackHash}`);
+
+      // Bust cache on-chain
+      const bustHash = await dependencies.runtime.walletClient.writeContract({
+        address: dependencies.client.config.trustRegistryAddress as `0x${string}`,
+        abi: parseAbi([
+          "function getCompositeScore(address agentAddress) external returns (uint8 score, bool unregistered, bool sybilFlagged, uint32 cachedAt)"
+        ]),
+        functionName: "getCompositeScore",
+        args: [profile.walletAddress as `0x${string}`],
+      });
+      await dependencies.runtime.publicClient.waitForTransactionReceipt({ hash: bustHash });
+      logger.log(`🟢 [Orchestrator] Cache busted for trust registry.`);
+    } catch (err: any) {
+      logger.log(`⚠️  [Orchestrator] Failed to submit feedback/bust cache: ${err.message}`);
+    }
+
+    return output;
   }
-  const output = await profile.execute(taskId);
 
-  logger.log(`🟢 [Orchestrator] Task #${taskId} executed and completed on-chain by ${agentKey}!`);
-  return output;
+  if (result.tier === 1) {
+    logger.log(`🟢 [Orchestrator] Task executed via Escrow (Tier 1) for ${agentKey}!`);
+  } else if (result.tier === 0) {
+    logger.log(`🟢 [Orchestrator] Task executed via Direct Pay (Tier 0) for ${agentKey}!`);
+  }
+
+  return result.output || "";
 }
 
 function getTaskTypeForAgentAndPrompt(agentKey: string, prompt: string): number {

@@ -9,6 +9,8 @@ foundation, provider agents, an orchestrator, and a dashboard shell. The current
 the core protocol contracts and their tests so the system can be deployed, exercised locally, and extended
 without replacing the public API later.
 
+![alt text](image.png)
+
 ## What TrustMesh Does
 
 TrustMesh decides how a payment should move based on the trust level of the payee:
@@ -168,42 +170,47 @@ TrustMesh is built on a highly modular and type-safe stack spanning smart contra
 ## Repository Layout
 
 ```text
-contracts/
-  src/
-    AgentMetricsRegistry.sol
-    EscrowVault.sol
-    IdentityRegistry.sol
-    PolicyEngine.sol
-    ReputationRegistry.sol
-    TaskAgent.sol
-    TrustRegistry.sol
-    ValidationRegistry.sol
-test/
-  *.ts
-packages/
-  shared/
-    src/
-      hashing.ts
-      types.ts
-  sdk/
-    src/
-      TrustMeshClient.ts
-      runtime.ts
-      errors.ts
-apps/
-  agents/
-    src/
-      cli.ts
-      server.ts
-      profiles.ts
-  orchestrator/
-    src/
-      cli.ts
-      index.ts
-  dashboard/
-    src/
-      lib/
-        protocolLabels.ts
+.
+├── contracts/                  # Solidity Smart Contracts (Avalanche Fuji / Local Dev)
+│   ├── src/
+│   │   ├── AgentMetricsRegistry.sol
+│   │   ├── EscrowVault.sol
+│   │   ├── IdentityRegistry.sol
+│   │   ├── PolicyEngine.sol
+│   │   ├── ReputationRegistry.sol
+│   │   ├── TaskAgent.sol
+│   │   ├── TrustRegistry.sol
+│   │   └── ValidationRegistry.sol
+│   └── test/                   # Hardhat Chai/TypeScript Unit Tests
+│       └── *.ts
+├── packages/                   # Shared Code & Interfaces
+│   ├── shared/                 # Common Types and Hashing Utilities
+│   │   └── src/
+│   │       ├── hashing.ts
+│   │       └── types.ts
+│   └── sdk/                    # Client/Node SDK for Blockchain & Protocol Operations
+│       └── src/
+│           ├── TrustMeshClient.ts
+│           ├── runtime.ts
+│           └── viemRuntime.ts
+└── apps/                       # Execution Environments & Interfaces
+    ├── agents/                 # Autonomous Service Providers (LLM Agent Server)
+    │   └── src/
+    │       ├── cli.ts
+    │       ├── server.ts       # Low-latency HTTP server for x402 handshakes
+    │       └── dataFeedPro.ts  # Individual agent nodes & profiles
+    ├── orchestrator/           # Orchestrator Node (Agent Coordinator & Dynamic Router)
+    │   └── src/
+    │       ├── cli.ts
+    │       └── index.ts
+    └── dashboard/              # Next.js Dashboard App for Visualization & Simulators
+        └── src/
+            ├── context/        # TrustMeshContext State Sync
+            ├── layout-client.tsx # Persistent Sidebar/Header Client Frame
+            └── app/
+                ├── docs/       # Developer Docs & Solidity API routing
+                ├── policy/     # PolicyEngine Trust Routing Simulator
+                └── page.tsx    # Core Overview Console & Live Event Logs
 ```
 
 ## Protocol Overview
@@ -564,17 +571,18 @@ needed by the SDK and orchestrator.
 
 ## Roadmap
 
-Immediate next steps:
+### Phase 1: Core Protocol Integration (Completed)
 
-- finish SDK runtime integration,
-- wire provider HTTP behavior,
-- connect the orchestrator to the SDK,
-- add live dashboard event subscriptions,
-- add deployment and seeding automation.
+- [x] **SDK Runtime Integration**: Built a robust TypeScript client and Viem-based runtime with retry handling for protocol interactions.
+- [x] **Provider HTTP x402 Handshake**: Wired up agent HTTP servers to challenge requests with x402 payment requirements.
+- [x] **Orchestrator-to-SDK Connection**: Connected the orchestrator CLI/daemon to the smart contract layer using the SDK runtime.
+- [x] **Live Dashboard & Event Subscriptions**: Refactored the dashboard shell into clean routed pages (Overview, Policy, Escrow, Validation, Faucet, Docs) and integrated live Web3 event subscriptions.
+- [x] **Deployment & Seeding Automation**: Developed Hardhat deploy and seed scripts supporting local network development and automated Fuji testnet wire-up.
+- [x] **Dynamic UI & Motion Enhancements**: Added spring-based framer-motion transitions for quarantine/reputation overlays and sliding drawer assistants, plus borderless layout styling.
 
-Later steps:
+### Phase 2: Production Scaling (In Progress)
 
-- live ERC-8004 and oracle integrations,
-- Teleporter and L1 simulation support,
-- Fuji and beyond deployment workflows,
-- stronger property-based and failure-matrix coverage.
+- [ ] **Live ERC-8004 & Oracle Integrations**: Wire up real-time production identity registries and decentralized reputation aggregators.
+- [ ] **Avalanche Teleporter & L1 Simulation**: Support cross-subnet trust routing and Teleporter messaging in multi-chain environments.
+- [ ] **Fuji & Beyond Deployment Workflows**: Standardize multi-environment CI/CD deployment pipelines.
+- [ ] **Property-Based Testing & Failure-Matrix Coverage**: Expand Hardhat unit test suites with property-based test suites to handle adversarial network conditions.

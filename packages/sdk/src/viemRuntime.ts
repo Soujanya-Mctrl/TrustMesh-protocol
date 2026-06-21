@@ -263,7 +263,7 @@ export class ViemRuntime implements TrustMeshRuntime {
         functionName: "giveFeedback",
         args: [
           agentId,
-          95n, // value
+          5n, // value
           0,   // decimals
           "fast", // tag1
           "accurate", // tag2
@@ -399,7 +399,7 @@ export class ViemRuntime implements TrustMeshRuntime {
         functionName: "giveFeedback",
         args: [
           agentId,
-          78n, // value
+          4n, // value
           0,   // decimals
           "correct-output", // tag1
           "", // tag2

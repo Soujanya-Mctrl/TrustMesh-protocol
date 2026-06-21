@@ -1,4 +1,6 @@
 import "./globals.css";
+import { TrustMeshProvider } from "../context/TrustMeshContext";
+import ClientLayoutWrapper from "./layout-client";
 
 export const metadata = {
   title: "TrustMesh Protocol Dashboard",
@@ -13,7 +15,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <TrustMeshProvider>
+          <ClientLayoutWrapper>
+            {children}
+          </ClientLayoutWrapper>
+        </TrustMeshProvider>
       </body>
     </html>
   );
