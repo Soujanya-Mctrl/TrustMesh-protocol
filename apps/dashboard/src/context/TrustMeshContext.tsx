@@ -83,6 +83,7 @@ interface TrustMeshContextType {
   providers: any[];
   setProviders: React.Dispatch<React.SetStateAction<any[]>>;
   activeEscalation: any | null;
+  clearEvents: () => void;
   
   // Orchestrator Console
   orchestratorPrompt: string;
@@ -92,6 +93,7 @@ interface TrustMeshContextType {
   setOrchestratorLog: React.Dispatch<React.SetStateAction<string>>;
   logContainerRef: React.RefObject<HTMLDivElement | null>;
   handleRunOrchestrator: () => Promise<void>;
+  handleStopOrchestrator: () => Promise<void>;
   logStartTimeRef: React.MutableRefObject<number>;
   
   // Balances & Funding
@@ -255,7 +257,7 @@ export const TrustMeshProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
 
   // Web3 Events
-  const { events, providers, activeEscalation, isConnected, setProviders } = useTrustMeshEvents(deployed);
+  const { events, providers, activeEscalation, isConnected, setProviders, clearEvents } = useTrustMeshEvents(deployed);
 
   const toggleTheme = () => {
     const nextTheme = theme === "light" ? "dark" : "light";
@@ -654,6 +656,14 @@ export const TrustMeshProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }
 
+  async function handleStopOrchestrator() {
+    try {
+      await fetch("/api/stop-orchestrator", { method: "POST" });
+    } catch (err: any) {
+      console.error("Failed to stop orchestrator:", err);
+    }
+  }
+
   async function handleRequestService(agentId: number) {
     const prompt = prompts[agentId]?.trim();
     if (!prompt) {
@@ -957,6 +967,7 @@ export const TrustMeshProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       handleSendDocAssistant,
 
       events,
+      clearEvents,
       providers,
       setProviders,
       activeEscalation,
@@ -968,6 +979,7 @@ export const TrustMeshProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setOrchestratorLog,
       logContainerRef,
       handleRunOrchestrator,
+      handleStopOrchestrator,
       logStartTimeRef,
       
       walletBalance,

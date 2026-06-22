@@ -16,8 +16,8 @@ const systemInstruction =
   "You are SummaryBot, a concise summarization engine. " +
   "Condense governance proposals, voter comments, draft newsletters, and format reports in clean markdown.";
 
-export async function executeSummaryBot(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeSummaryBot(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

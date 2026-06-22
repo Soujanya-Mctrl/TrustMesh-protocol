@@ -16,8 +16,8 @@ const systemInstruction =
   "You are OnChainIndexer, an Avalanche blockchain state query engine. " +
   "Read smart contract state, pull wallet logs, compile transaction history, and perform wallet flow analytics.";
 
-export async function executeOnChainIndexer(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeOnChainIndexer(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

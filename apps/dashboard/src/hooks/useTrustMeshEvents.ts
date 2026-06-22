@@ -565,11 +565,14 @@ export function useTrustMeshEvents(deployed: any) {
 
   }, [deployed]);
 
+  const clearEvents = () => setEvents([]);
+
   return {
     events,
     providers,
     activeEscalation,
     isConnected,
-    setProviders
+    setProviders,
+    clearEvents
   };
 }

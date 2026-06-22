@@ -22,7 +22,7 @@ export interface AgentProfile extends ProviderProfile {
     provider: "gemini" | "groq";
     model?: string;
   };
-  execute: (taskId: bigint) => Promise<string>;
+  execute: (taskId: bigint, prompt?: string) => Promise<string>;
 }
 
 export const providerProfiles: Record<string, AgentProfile> = {

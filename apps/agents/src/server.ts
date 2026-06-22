@@ -281,7 +281,7 @@ export interface AgentConfig {
   };
 }
 
-export async function executeAgentTask(config: AgentConfig, taskId: bigint): Promise<string> {
+export async function executeAgentTask(config: AgentConfig, taskId: bigint, promptFallback?: string): Promise<string> {
   const account = privateKeyToAccount(config.privateKey);
   
   const walletClient = createWalletClient({
@@ -294,30 +294,55 @@ export async function executeAgentTask(config: AgentConfig, taskId: bigint): Pro
   console.log(`\n[${config.name}] [Task #${idStr}] Beginning task execution...`);
 
   // 1. Fetch task
-  const task = await publicClient.readContract({
-    address: config.contractAddress,
-    abi: TaskAgentABI,
-    functionName: "getTask",
-    args: [taskId],
-  }) as any;
+  let taskExists = false;
+  let prompt = promptFallback || "";
 
-  const status = Number(task.status !== undefined ? task.status : task[4]);
-  if (status !== 0) {
-    throw new Error(`Task #${idStr} is not in Pending status. Status: ${status}`);
+  try {
+    const task = await publicClient.readContract({
+      address: config.contractAddress,
+      abi: TaskAgentABI,
+      functionName: "getTask",
+      args: [taskId],
+    }) as any;
+
+    const requester = task.requester !== undefined ? task.requester : task[2];
+    if (requester && requester !== "0x0000000000000000000000000000000000000000") {
+      taskExists = true;
+      const status = Number(task.status !== undefined ? task.status : task[4]);
+      if (status !== 0) {
+        throw new Error(`Task #${idStr} is not in Pending status. Status: ${status}`);
+      }
+
+      const taskAgentId = BigInt(task.agentId !== undefined ? task.agentId : task[1]);
+      if (config.agentId !== undefined && taskAgentId !== BigInt(config.agentId)) {
+        throw new Error(`Task #${idStr} is assigned to agentId ${taskAgentId}, but this agent is configured with agentId ${config.agentId}`);
+      }
+
+      const inputURI = task.inputURI !== undefined ? task.inputURI : task[5];
+      prompt = inputURI;
+      if (inputURI.startsWith("data:")) {
+        const match = inputURI.match(/data:[^,]*,(.+)/);
+        if (match) {
+          prompt = decodeURIComponent(match[1]);
+        }
+      }
+    }
+  } catch (err: any) {
+    console.log(`  [executeAgentTask] Note: Contract read for Task #${idStr} returned error or not found: ${err.message}`);
   }
 
-  const taskAgentId = BigInt(task.agentId !== undefined ? task.agentId : task[1]);
-  if (config.agentId !== undefined && taskAgentId !== BigInt(config.agentId)) {
-    throw new Error(`Task #${idStr} is assigned to agentId ${taskAgentId}, but this agent is configured with agentId ${config.agentId}`);
+  if (!taskExists) {
+    console.log(`  [executeAgentTask] Task #${idStr} does not exist on-chain. Generating AI response directly...`);
+    const output = await generateAIContent(
+      config.name, 
+      prompt, 
+      config.systemInstruction,
+      undefined,
+      undefined,
+      config.llmConfig
+    );
+    return output;
   }
-
-  const inputURI = task.inputURI !== undefined ? task.inputURI : task[5];
-  const taskType = Number(task.taskType !== undefined ? task.taskType : task[3]);
-  const requester = task.requester !== undefined ? task.requester : task[2];
-
-  console.log(`  Type: ${taskType}`);
-  console.log(`  Requester: ${requester}`);
-  console.log(`  Input: ${inputURI}`);
 
   try {
     // 2. Mark task InProgress on-chain
@@ -333,14 +358,6 @@ export async function executeAgentTask(config: AgentConfig, taskId: bigint): Pro
 
     // 3. Process AI content
     console.log(`  [2/3] Generating AI response...`);
-    let prompt = inputURI;
-    if (inputURI.startsWith("data:")) {
-      const match = inputURI.match(/data:[^,]*,(.+)/);
-      if (match) {
-        prompt = decodeURIComponent(match[1]);
-      }
-    }
-
     const output = await generateAIContent(
       config.name, 
       prompt, 

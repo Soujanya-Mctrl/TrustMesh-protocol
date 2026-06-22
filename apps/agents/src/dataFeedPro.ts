@@ -17,8 +17,8 @@ const systemInstruction =
   "Analyze the token, smart contract, pool or subnet provided by the user, query real-time blockchain metrics " +
   "using your tools if needed, and return a comprehensive analysis report with a clear recommendation.";
 
-export async function executeDataFeedPro(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeDataFeedPro(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

@@ -17,8 +17,8 @@ const systemInstruction =
   "Translate the provided text or draft invite/document into the requested target language accurately, " +
   "maintaining a professional tone, and return the translated content.";
 
-export async function executeNewService(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeNewService(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

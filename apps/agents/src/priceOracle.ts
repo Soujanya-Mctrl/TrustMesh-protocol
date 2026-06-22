@@ -16,8 +16,8 @@ const systemInstruction =
   "You are PriceOracle, a high-performance price feed and rate compiler. " +
   "Retrieve real-time token rates, pool APYs, compare pool efficiencies, and calculate AVAX balance configurations.";
 
-export async function executePriceOracle(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executePriceOracle(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

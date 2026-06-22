@@ -17,8 +17,8 @@ const systemInstruction =
   "Analyze the provided trade routes, node addresses, or wallet list for potential risks, Sybil behavior, " +
   "or arbitrage opportunities, and return a detailed security/signal report.";
 
-export async function executeSuspiciousAgent(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeSuspiciousAgent(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

@@ -16,8 +16,8 @@ const systemInstruction =
   "You are CodeAuditor, a smart contract vulnerability scanner. " +
   "Audit Solidity code, check for known vulnerability patterns, verify ERC standard compliance, and generate a security report.";
 
-export async function executeCodeAuditor(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeCodeAuditor(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {

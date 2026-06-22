@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   Shield, 
   Activity, 
@@ -52,6 +52,7 @@ export default function ClientLayoutWrapper({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const {
     account,
     connectWallet,
@@ -128,15 +129,20 @@ export default function ClientLayoutWrapper({
         </div>
 
         {/* Filter / Search input in Sidebar */}
-        {sidebarOpen && pathname === "/" && (
+        {sidebarOpen && (
           <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800/80">
             <div className="relative flex items-center">
               <Search className="absolute left-2.5 w-3.5 h-3.5 text-zinc-400" />
               <input 
                 type="text" 
-                placeholder="Filter elements..." 
+                placeholder="Filter docs..." 
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!pathname.startsWith("/docs")) {
+                    router.push("/docs");
+                  }
+                }}
                 className="w-full text-xs pl-8 pr-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-md bg-zinc-50 dark:bg-[#0E0E10] focus:outline-none focus:border-[#E84142] text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400"
               />
             </div>

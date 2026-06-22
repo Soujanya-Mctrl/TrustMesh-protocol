@@ -298,7 +298,10 @@ export async function runOrchestrator(
     logger.log(`--------------------------------------------------`);
 
     // Dynamic routing: find all candidate agents that possess the matching capability
-    const candidates = agentsInfo.filter(a => a.capabilities.includes(step.requiredCapability));
+    const requiredCaps = step.requiredCapability.split(",").map(c => c.trim().toLowerCase());
+    const candidates = agentsInfo.filter(a => 
+      a.capabilities.some(ac => requiredCaps.includes(ac.toLowerCase()))
+    );
     if (candidates.length === 0) {
       throw new Error(`No agent found with capability: ${step.requiredCapability}`);
     }
@@ -309,33 +312,51 @@ export async function runOrchestrator(
 
     // Sort by fee ascending to choose the cheapest agent (minimum AVAX spent)
     finalCandidates.sort((a, b) => Number(a.profile.serviceFee) - Number(b.profile.serviceFee));
-    const chosen = finalCandidates[0];
 
-    // Query PolicyEngine on-chain to decide the tier dynamically based on smart contract logic
-    const tier = await dependencies.runtime.publicClient.readContract({
-      address: deployed.contracts.PolicyEngine,
-      abi: parseAbi([
-        "function evaluateTier(address payee, uint256 amountAvax) external view returns (uint8)"
-      ]),
-      functionName: "evaluateTier",
-      args: [chosen.profile.walletAddress, BigInt(chosen.profile.serviceFee)],
-    }) as number;
+    let success = false;
+    let stepOutput = "";
 
-    logger.log(`[Lead Agent] Dynamic routing resolved:`);
-    logger.log(`  Candidates: ${candidates.map(c => `${c.key} (score: ${c.trustScore}, fee: ${Number(c.profile.serviceFee)/1e18} AVAX)`).join(", ")}`);
-    logger.log(`  Chosen Agent: ${chosen.key} (Tier ${tier} resolved dynamically by PolicyEngine smart contract logic)`);
+    for (let candidateIdx = 0; candidateIdx < finalCandidates.length; candidateIdx++) {
+      const chosen = finalCandidates[candidateIdx];
+      
+      try {
+        // Query PolicyEngine on-chain to decide the tier dynamically based on smart contract logic
+        const tier = await dependencies.runtime.publicClient.readContract({
+          address: deployed.contracts.PolicyEngine,
+          abi: parseAbi([
+            "function evaluateTier(address payee, uint256 amountAvax) external view returns (uint8)"
+          ]),
+          functionName: "evaluateTier",
+          args: [chosen.profile.walletAddress, BigInt(chosen.profile.serviceFee)],
+        }) as number;
 
-    // Resolve prompt placeholders (e.g. {{output_0}}, {{output_1}})
-    let resolvedPrompt = step.prompt;
-    for (let j = 0; j < stepOutputs.length; j++) {
-      resolvedPrompt = resolvedPrompt.replace(new RegExp(`\\{\\{output_${j}\\}\\}`, "g"), stepOutputs[j]);
+        logger.log(`[Lead Agent] Dynamic routing resolved (Attempt ${candidateIdx + 1}/${finalCandidates.length}):`);
+        logger.log(`  Candidates: ${candidates.map(c => `${c.key} (score: ${c.trustScore}, fee: ${Number(c.profile.serviceFee)/1e18} AVAX)`).join(", ")}`);
+        logger.log(`  Chosen Agent: ${chosen.key} (Tier ${tier} resolved dynamically by PolicyEngine smart contract logic)`);
+
+        // Resolve prompt placeholders (e.g. {{output_0}}, {{output_1}})
+        let resolvedPrompt = step.prompt;
+        for (let j = 0; j < stepOutputs.length; j++) {
+          resolvedPrompt = resolvedPrompt.replace(new RegExp(`\\{\\{output_${j}\\}\\}`, "g"), stepOutputs[j]);
+        }
+
+        logger.log(`[Lead Agent] Prompt: "${resolvedPrompt}"`);
+        stepOutput = await executeOnChainStep(dependencies, chosen.key, chosen, resolvedPrompt, logger);
+        stepOutputs.push(stepOutput);
+        
+        logger.log(`[Lead Agent] Output: ${stepOutput.slice(0, 150)}${stepOutput.length > 150 ? '...' : ''}`);
+        success = true;
+        break; // Successfully executed this step, break the failover loop
+      } catch (err: any) {
+        logger.error(`⚠️ [Lead Agent] Failed to execute step with agent ${chosen.key}: ${err.message || err}`);
+        if (candidateIdx < finalCandidates.length - 1) {
+          logger.log(`🔄 [Lead Agent] Retrying with fallback agent...`);
+        } else {
+          // If all candidates failed, throw the final error
+          throw new Error(`All candidate agents failed for step ${i + 1}. Last error: ${err.message || err}`);
+        }
+      }
     }
-
-    logger.log(`[Lead Agent] Prompt: "${resolvedPrompt}"`);
-    const output = await executeOnChainStep(dependencies, chosen.key, chosen, resolvedPrompt, logger);
-    stepOutputs.push(output);
-
-    logger.log(`[Lead Agent] Output: ${output.slice(0, 150)}${output.length > 150 ? '...' : ''}`);
   }
 
   logger.log(`\n==================================================`);
@@ -387,7 +408,7 @@ async function executeOnChainStep(
 
     // Execute the agent directly now that validation is approved
     logger.log(`[Orchestrator] Invoking agent ${agentKey} directly after validation approval...`);
-    const output = await profile.execute(1n);
+    const output = await profile.execute(1n, prompt);
     logger.log(`🟢 [Orchestrator] Task executed and completed by ${agentKey}!`);
 
     // Submit feedback to ReputationRegistry to complete the feedback loop

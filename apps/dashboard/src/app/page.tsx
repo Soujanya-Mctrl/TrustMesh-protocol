@@ -9,7 +9,9 @@ import {
   Check, 
   Copy, 
   ChevronRight, 
-  ArrowRight 
+  ArrowRight,
+  Square,
+  Trash2 
 } from "lucide-react";
 import { useTrustMeshContext } from "../context/TrustMeshContext";
 
@@ -22,11 +24,14 @@ export default function OverviewPage() {
     setOrchestratorPrompt,
     executingOrchestrator,
     handleRunOrchestrator,
+    handleStopOrchestrator,
     orchestratorLog,
+    setOrchestratorLog,
     copiedAgentId,
     handleCopyText,
     logContainerRef,
     events,
+    clearEvents,
     activeEscalation,
     resolveValidation,
     submitting,
@@ -88,23 +93,24 @@ export default function OverviewPage() {
             disabled={executingOrchestrator}
             className="flex-1 text-sm px-4 py-3 bg-zinc-50 dark:bg-zinc-950/30 border border-zinc-200 dark:border-zinc-800/80 rounded-xl focus:outline-none focus:border-[#E84142] focus:ring-1 focus:ring-[#E84142] text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400/40 font-medium transition"
           />
-          <button
-            onClick={handleRunOrchestrator}
-            disabled={executingOrchestrator || !account}
-            className="bg-[#E84142] hover:bg-[#d63435] text-white font-extrabold px-6 py-3 rounded-xl text-sm tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          >
-            {executingOrchestrator ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Running...
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-current" />
-                Run Orchestrator
-              </>
-            )}
-          </button>
+          {executingOrchestrator ? (
+            <button
+              onClick={handleStopOrchestrator}
+              className="bg-red-500 hover:bg-red-600 text-white font-extrabold px-6 py-3 rounded-xl text-sm tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] shrink-0"
+            >
+              <Square className="w-4 h-4 fill-current" />
+              Stop Orchestrator
+            </button>
+          ) : (
+            <button
+              onClick={handleRunOrchestrator}
+              disabled={!account}
+              className="bg-[#E84142] hover:bg-[#d63435] text-white font-extrabold px-6 py-3 rounded-xl text-sm tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              Run Orchestrator
+            </button>
+          )}
         </div>
 
         {/* Preset Quick Actions */}
@@ -144,13 +150,25 @@ export default function OverviewPage() {
                   <span className="ml-1 w-1.5 h-1.5 bg-[#E84142] rounded-full animate-pulse" />
                 )}
               </span>
-              <button
-                onClick={() => handleCopyText(orchestratorLog, 99)}
-                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-655 dark:hover:text-zinc-200 transition"
-                title="Copy full log"
-              >
-                {copiedAgentId === 99 ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    setOrchestratorLog("");
+                    clearEvents();
+                  }}
+                  className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition"
+                  title="Clear log"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleCopyText(orchestratorLog, 99)}
+                  className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition"
+                  title="Copy full log"
+                >
+                  {copiedAgentId === 99 ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
 
             <div ref={logContainerRef as any} className="max-h-[360px] overflow-y-auto">

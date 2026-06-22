@@ -4,6 +4,29 @@ import React from "react";
 import { ExternalLink, ChevronRight, Terminal, Copy, Check, HelpCircle } from "lucide-react";
 import { useTrustMeshContext } from "../../context/TrustMeshContext";
 
+const docContentSearchMap: Record<string, string> = {
+  intro: `Introduction to TrustMesh. The Trust-Aware Agentic Payment Protocol powering autonomous secure transactions.
+    "Kite tells your agent how to spend. TrustMesh tells your agent who to trust."
+    The Core Problem: AI agents spend money. Payment rails lack trust verification. Sybil attacks, micro-transaction volume boosting, prompt injection, and premature release of funds.
+    TrustMesh Stack: x402 Protocol (spending rail, HTTP-native token), ERC-8004 Registry (reputation primitive, Avalanche C-Chain).
+    Weighted Multi-Signal Evaluation: reputation, registration age, volume, diversity (Sybils flagged).
+    Dynamic 3-Tier Payment Terms: Tier 0 Auto-Approve (70-100 score, instant C-Chain), Tier 1 Escrow Vault (40-69 score, commit-lock-reveal preimage), Tier 2 Sandbox & Escalate (0-39 score, isolated Subnet via AWM, human review override).`,
+  consensus: `Snowman Consensus. linear order transaction finalization, EVM subnets. repeated random sub-sampling queries peers, agreement supermajority, sub-second finality.`,
+  token: `AVAX & TMESH Token. Tokenomics, gas routing fees, dynamic payment settlement. AVAX gas fees burned. EIP-8004 reputation, rewards, micropayments.`,
+  policy: `Policy Engine. PolicyEngine.sol gateway contract, routing agent payments. evaluateTier, human override, recordHumanDecision.`,
+  trust: `Trust Registry. TrustRegistry.sol contract, composite rating cache. CACHE_TTL cache, scoring weighted sum, Sybil penalization.`,
+  escrow: `Escrow Vault. EscrowVault.sol commit-lock-reveal micropayment isolation contract. createEscrow, expectedHash, submitDeliverable preimage hash.`,
+  client: `TrustMesh Client. TypeScript Client SDK, @trustmesh/sdk, TrustMeshClient, rpcUrl, policyEngineAddress, walletPrivateKey.`,
+  routing: `Tiers Routing. client.pay method, dynamic routing, settlement tiers.`,
+  events: `Event Handlers. SDK client event hooks, tier_assigned, escrow_created, compositeScore.`,
+  deploy: `Subnet Deployment. Local L1 Sandbox, Avalanche CLI, avalanche network clean, avalanche blockchain create evm TMESH, deploy trustmesh --local.`,
+  seeding: `Reputation Seeding. setup scripts, deploy contracts, mock reviews, npm run l1:setup.`,
+  testing: `E2E Testing. routing tiers, automated validation rules, HTTP agent servers, npm run agents, npm run demo.`,
+  repo: `Source Repository. Solidity smart contracts, TypeScript SDK client, orchestrator, dashboard, GitHub link Soujanya-Mctrl/TrustMesh-protocol.`,
+  structure: `Directory Layout. monorepo tree: trust_mesh, contracts, packages/sdk, apps/orchestrator, apps/agents, apps/dashboard.`,
+  contribute: `Contribution Guide. Pull Requests, forks, npx hardhat test.`
+};
+
 export default function DocsPage() {
   const {
     activeDocTopic,
@@ -13,7 +36,49 @@ export default function DocsPage() {
     copiedAgentId,
     handleCopyText,
     setShowDocAssistant,
+    searchQuery,
   } = useTrustMeshContext();
+
+  const filterDocs = (items: { id: string; label: string }[]) => {
+    if (!searchQuery) return items;
+    const q = searchQuery.toLowerCase();
+    return items.filter(item => {
+      const labelMatch = item.label.toLowerCase().includes(q);
+      const content = docContentSearchMap[item.id] || "";
+      const contentMatch = content.toLowerCase().includes(q);
+      return labelMatch || contentMatch;
+    });
+  };
+
+  const primaryNetworkItems = filterDocs([
+    { id: "intro", label: "Introduction" },
+    { id: "consensus", label: "Snowman Consensus" },
+    { id: "token", label: "AVAX & TMESH Token" }
+  ]);
+
+  const coreContractsItems = filterDocs([
+    { id: "policy", label: "Policy Engine" },
+    { id: "trust", label: "Trust Registry" },
+    { id: "escrow", label: "Escrow Vault" }
+  ]);
+
+  const sdkIntegrationItems = filterDocs([
+    { id: "client", label: "TrustMesh Client" },
+    { id: "routing", label: "Tiers Routing" },
+    { id: "events", label: "Event Handlers" }
+  ]);
+
+  const sandboxItems = filterDocs([
+    { id: "deploy", label: "Subnet Deployment" },
+    { id: "seeding", label: "Reputation Seeding" },
+    { id: "testing", label: "E2E Testing" }
+  ]);
+
+  const githubItems = filterDocs([
+    { id: "repo", label: "Source Repository" },
+    { id: "structure", label: "Directory Layout" },
+    { id: "contribute", label: "Contribution Guide" }
+  ]);
 
   const docPages = [
     { id: "intro", label: "Introduction", category: "overview" },
@@ -30,8 +95,31 @@ export default function DocsPage() {
     { id: "testing", label: "E2E Testing", category: "sandbox" },
     { id: "repo", label: "Source Repository", category: "github" },
     { id: "structure", label: "Directory Layout", category: "github" },
-    { id: "contribute", label: "Contribution Guide", category: "github" }
   ];
+
+  React.useEffect(() => {
+    if (!searchQuery) return;
+    const q = searchQuery.toLowerCase();
+    
+    // Check if current activeSubTopic matches the query
+    const currentMatches = docPages.find(p => p.id === activeSubTopic);
+    const currentText = currentMatches ? (docContentSearchMap[activeSubTopic] || "").toLowerCase() : "";
+    const currentLabel = currentMatches ? currentMatches.label.toLowerCase() : "";
+    const currentIsMatch = currentLabel.includes(q) || currentText.includes(q);
+    
+    if (!currentIsMatch) {
+      // Find the first page that matches
+      const firstMatch = docPages.find(p => {
+        const label = p.label.toLowerCase();
+        const text = (docContentSearchMap[p.id] || "").toLowerCase();
+        return label.includes(q) || text.includes(q);
+      });
+      if (firstMatch) {
+        setActiveDocTopic(firstMatch.category);
+        setActiveSubTopic(firstMatch.id);
+      }
+    }
+  }, [searchQuery, activeSubTopic, setActiveDocTopic, setActiveSubTopic]);
 
   const currentIndex = docPages.findIndex(p => p.id === activeSubTopic);
   const prevPage = currentIndex > 0 ? docPages[currentIndex - 1] : null;
@@ -46,124 +134,124 @@ export default function DocsPage() {
         <div className="space-y-6">
           
           {/* Category: Primary Network */}
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">Primary Network</h4>
-            <div className="space-y-0.5">
-              {[
-                { id: "intro", label: "Introduction" },
-                { id: "consensus", label: "Snowman Consensus" },
-                { id: "token", label: "AVAX & TMESH Token" }
-              ].map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveDocTopic("overview"); setActiveSubTopic(item.id); }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
-                    ${activeSubTopic === item.id 
-                      ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-                >
-                  <span>{item.label}</span>
-                  {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
-                </button>
-              ))}
+          {primaryNetworkItems.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">Primary Network</h4>
+              <div className="space-y-0.5">
+                {primaryNetworkItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveDocTopic("overview"); setActiveSubTopic(item.id); }}
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
+                      ${activeSubTopic === item.id 
+                        ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+                  >
+                    <span>{item.label}</span>
+                    {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Category: Core Contracts */}
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">Core Contracts</h4>
-            <div className="space-y-0.5">
-              {[
-                { id: "policy", label: "Policy Engine" },
-                { id: "trust", label: "Trust Registry" },
-                { id: "escrow", label: "Escrow Vault" }
-              ].map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveDocTopic("contracts"); setActiveSubTopic(item.id); }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
-                    ${activeSubTopic === item.id 
-                      ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-                >
-                  <span>{item.label}</span>
-                  {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
-                </button>
-              ))}
+          {coreContractsItems.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">Core Contracts</h4>
+              <div className="space-y-0.5">
+                {coreContractsItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveDocTopic("contracts"); setActiveSubTopic(item.id); }}
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
+                      ${activeSubTopic === item.id 
+                        ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+                  >
+                    <span>{item.label}</span>
+                    {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Category: SDK Integration */}
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">SDK Integration</h4>
-            <div className="space-y-0.5">
-              {[
-                { id: "client", label: "TrustMesh Client" },
-                { id: "routing", label: "Tiers Routing" },
-                { id: "events", label: "Event Handlers" }
-              ].map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveDocTopic("sdk"); setActiveSubTopic(item.id); }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
-                    ${activeSubTopic === item.id 
-                      ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-                >
-                  <span>{item.label}</span>
-                  {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
-                </button>
-              ))}
+          {sdkIntegrationItems.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">SDK Integration</h4>
+              <div className="space-y-0.5">
+                {sdkIntegrationItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveDocTopic("sdk"); setActiveSubTopic(item.id); }}
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
+                      ${activeSubTopic === item.id 
+                        ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+                  >
+                    <span>{item.label}</span>
+                    {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Category: Local L1 Sandbox */}
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">Local L1 Sandbox</h4>
-            <div className="space-y-0.5">
-              {[
-                { id: "deploy", label: "Subnet Deployment" },
-                { id: "seeding", label: "Reputation Seeding" },
-                { id: "testing", label: "E2E Testing" }
-              ].map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveDocTopic("sandbox"); setActiveSubTopic(item.id); }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
-                    ${activeSubTopic === item.id 
-                      ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-                >
-                  <span>{item.label}</span>
-                  {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
-                </button>
-              ))}
+          {sandboxItems.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">Local L1 Sandbox</h4>
+              <div className="space-y-0.5">
+                {sandboxItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveDocTopic("sandbox"); setActiveSubTopic(item.id); }}
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
+                      ${activeSubTopic === item.id 
+                        ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+                  >
+                    <span>{item.label}</span>
+                    {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Category: GitHub Codebase */}
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">GitHub Codebase</h4>
-            <div className="space-y-0.5">
-              {[
-                { id: "repo", label: "Source Repository" },
-                { id: "structure", label: "Directory Layout" },
-                { id: "contribute", label: "Contribution Guide" }
-              ].map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveDocTopic("github"); setActiveSubTopic(item.id); }}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
-                    ${activeSubTopic === item.id 
-                      ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-                >
-                  <span>{item.label}</span>
-                  {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
-                </button>
-              ))}
+          {githubItems.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-2 mb-2 select-none font-sans">GitHub Codebase</h4>
+              <div className="space-y-0.5">
+                {githubItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveDocTopic("github"); setActiveSubTopic(item.id); }}
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all flex items-center justify-between group
+                      ${activeSubTopic === item.id 
+                        ? "bg-red-500/5 text-[#E84142] dark:bg-[#E84142]/10 dark:text-[#E84142] font-bold" 
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/30 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+                  >
+                    <span>{item.label}</span>
+                    {activeSubTopic === item.id && <span className="w-1.5 h-1.5 rounded-full bg-[#E84142]" />}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {primaryNetworkItems.length === 0 &&
+           coreContractsItems.length === 0 &&
+           sdkIntegrationItems.length === 0 &&
+           sandboxItems.length === 0 &&
+           githubItems.length === 0 && (
+             <div className="text-zinc-400 dark:text-zinc-600 text-xs italic text-center py-8">
+               No matches found
+             </div>
+           )}
         </div>
 
         {/* GitHub repo link at bottom of left sidebar */}
@@ -232,7 +320,7 @@ export default function DocsPage() {
                       </div>
                       <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200">The Spending Rail</h4>
                       <p className="text-[11px] text-zinc-500 leading-relaxed font-semibold">
-                        An HTTP-native stablecoin payment standard built to handle programmatic machine-to-machine transfers.
+                        An HTTP-native token payment standard built to handle programmatic machine-to-machine transfers.
                       </p>
                     </div>
                     <div className="p-4 bg-white dark:bg-[#131316] border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2">

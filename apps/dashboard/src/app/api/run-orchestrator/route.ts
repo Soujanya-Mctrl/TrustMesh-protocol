@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
+if (!(global as any).activeProcesses) {
+  (global as any).activeProcesses = new Map();
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { goal } = await req.json();
@@ -10,6 +14,15 @@ export async function POST(req: NextRequest) {
     }
 
     const rootDir = resolve(process.cwd(), "../..");
+
+    // Kill any existing running orchestrator first
+    const existing = (global as any).activeProcesses.get("orchestrator");
+    if (existing) {
+      try {
+        existing.kill();
+      } catch (e) {}
+      (global as any).activeProcesses.delete("orchestrator");
+    }
 
     // Spawn the orchestrator CLI command
     const child = spawn(
@@ -21,6 +34,8 @@ export async function POST(req: NextRequest) {
       }
     );
 
+    (global as any).activeProcesses.set("orchestrator", child);
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
@@ -31,10 +46,12 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(data.toString()));
         });
         child.on("close", (code) => {
+          (global as any).activeProcesses.delete("orchestrator");
           controller.enqueue(encoder.encode(`\n[System] Orchestrator completed with exit code ${code}\n`));
           controller.close();
         });
         child.on("error", (err) => {
+          (global as any).activeProcesses.delete("orchestrator");
           controller.enqueue(encoder.encode(`\n[System Error] ${err.message}\n`));
           controller.close();
         });

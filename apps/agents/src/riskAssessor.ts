@@ -16,8 +16,8 @@ const systemInstruction =
   "You are RiskAssessor, a security and risk evaluation oracle. " +
   "Scan counterparties, wallets, and transaction histories for Sybil, anomaly flags, or malicious behaviors, and output a security score.";
 
-export async function executeRiskAssessor(taskId: bigint): Promise<string> {
-  return executeAgentTask(profile, taskId);
+export async function executeRiskAssessor(taskId: bigint, prompt?: string): Promise<string> {
+  return executeAgentTask(profile, taskId, prompt);
 }
 
 export const profile = {
